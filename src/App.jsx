@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState } from 'react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import MapComponent from './MapComponent';
 import { transformRawToLocal } from './utils/geo'; // Импорт функции трансформации
 import './App.css'; 
