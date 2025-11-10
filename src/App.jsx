@@ -1,151 +1,114 @@
 // src/App.jsx
 import React, { useState } from 'react';
-import Papa from 'papaparse'; // Импорт парсера
-import { applyTransformation } from './utils/geo';
-import MapComponent from './MapComponent';
+import Papa from 'papaparse';
+import MapComponent from './MapComponent'; // Будет создан на следующем шаге
+import { toWgs84 } from './utils/geo'; // Будет создан на следующем шаге
 import './App.css'; 
 
-// Заголовки координат из вашего CSV, которые нужно обработать
-const COORD_FIELDS = ['RawStartPointX', 'RawStartPointY', 'RawStartPointZ', 
-                      'RawEndPointX', 'RawEndPointY', 'RawEndPointZ'];
-
-// Функция для очистки и преобразования числового значения
-const cleanAndParse = (value) => {
-    // 1. Замена запятой на точку
-    // 2. Преобразование строки в число с плавающей точкой
-    // 3. Если значение null/undefined/пустая строка, вернуть 0
-    return parseFloat(String(value || '0').replace(',', '.'));
-};
-
 function App() {
-    const [data, setData] = useState([]);
-    const [fileName, setFileName] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+  const [drillHoles, setDrillHoles] = useState([]);
+  const [mapCenter, setMapCenter] = useState(null);
+  const [error, setError] = useState(null);
 
-    // --- 1. ОБРАБОТКА ЗАГРУЗКИ ФАЙЛА ---
-    const handleFileUpload = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-        setLoading(true);
-        setError(null);
-        setFileName(file.name);
-        setData([]);
+    setError(null);
 
-        // Используем PapaParse для чтения и парсинга CSV-файла
-        Papa.parse(file, {
-            header: true,             // Преобразовать первую строку в заголовки полей
-            skipEmptyLines: true,     // Пропускать пустые строки
-            dynamicTyping: false,     // Не пытаться преобразовать в числа автоматически (нам нужно сначала очистить запятые)
-            delimiter: ',',           // Разделитель полей - запятая
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      delimiter: ',', // Учитываем, что разделителем может быть запятая
+      complete: (results) => {
+        if (results.errors.length) {
+          setError('Ошибка парсинга CSV: ' + results.errors[0].message);
+          console.error("CSV Errors:", results.errors);
+          return;
+        }
+
+        try {
+          const transformedHoles = results.data
+            .map(row => {
+              // Используем RawEndPointX и RawEndPointY для координат 
+              const X = row.RawEndPointX;
+              const Y = row.RawEndPointY;
+
+              if (X === null || Y === null || X === undefined || Y === undefined) {
+                  return null; // Пропускаем строки без координат
+              }
+              
+              // Переводим локальные координаты (X, Y) в географические (Lat, Lng)
+              const wgs84 = toWgs84(X, Y); 
+              
+              return {
+                id: row.HoleId,
+                name: row.HoleName,
+                // Записываем сначала широту (Lat), потом долготу (Lng) - так требует Leaflet
+                latlng: [wgs84.lat, wgs84.lng], 
+                start: [row.RawStartPointX, row.RawStartPointY, row.RawStartPointZ],
+                end: [X, Y, row.RawEndPointZ]
+              };
+            })
+            .filter(hole => hole !== null); // Удаляем пропущенные (невалидные) точки
             
-            complete: (results) => {
-                if (results.errors.length) {
-                    setError(`Ошибка парсинга: ${results.errors[0].message}`);
-                    setLoading(false);
-                    return;
-                }
-                
-                // --- 2. ОЧИСТКА И ТРАНСФОРМАЦИЯ ДАННЫХ ---
-                const processedData = results.data.map((item, index) => {
-                    
-                    // Очистка и парсинг всех числовых координат
-                    const rawStartX = cleanAndParse(item.RawStartPointX);
-                    const rawStartY = cleanAndParse(item.RawStartPointY);
-                    
-                    const rawEndX = cleanAndParse(item.RawEndPointX);
-                    const rawEndY = cleanAndParse(item.RawEndPointY);
-                    
-                    // Применение трансформации Гельмерта
-                    const localStartCoords = applyTransformation(rawStartX, rawStartY);
-                    const localEndCoords = applyTransformation(rawEndX, rawEndY);
+          if (transformedHoles.length === 0) {
+            setError('Не найдено валидных данных с координатами для отображения.');
+            setDrillHoles([]);
+            setMapCenter(null);
+            return;
+          }
 
-                    return {
-                        ...item,
-                        id: index, // Добавляем уникальный ID для React
-                        
-                        // Локальные координаты начала
-                        LocalStartPointX: localStartCoords.x.toFixed(3),
-                        LocalStartPointY: localStartCoords.y.toFixed(3),
-                        LocalStartPointZ: cleanAndParse(item.RawStartPointZ).toFixed(3),
-                        
-                        // Локальные координаты конца
-                        LocalEndPointX: localEndCoords.x.toFixed(3),
-                        LocalEndPointY: localEndCoords.y.toFixed(3),
-                        LocalEndPointZ: cleanAndParse(item.RawEndPointZ).toFixed(3),
-                    };
-                });
+          setDrillHoles(transformedHoles);
+          
+          // Вычисляем среднюю точку для центрирования карты
+          const avgLat = transformedHoles.reduce((sum, hole) => sum + hole.latlng[0], 0) / transformedHoles.length;
+          const avgLng = transformedHoles.reduce((sum, hole) => sum + hole.latlng[1], 0) / transformedHoles.length;
+          setMapCenter([avgLat, avgLng]);
 
-                setData(processedData);
-                setLoading(false);
-            },
-            error: (err) => {
-                setError(`Ошибка чтения файла: ${err.message}`);
-                setLoading(false);
-            }
-        });
-    };
+        } catch (e) {
+            setError('Ошибка обработки данных или трансформации координат: ' + e.message);
+            console.error("Processing Error:", e);
+        }
+      }
+    });
+  };
 
-    // --- 3. ИНТЕРФЕЙС И ОТОБРАЖЕНИЕ ---
-    return (
-        <div className="container">
-            <h1>Паспорта Бурения (ЛСК)</h1>
-            
-            <div className="controls">
-                <input 
-                    type="file" 
-                    accept=".csv" 
-                    onChange={handleFileUpload} 
-                    disabled={loading}
-                />
-                {fileName && <p>Загружен файл: **{fileName}**</p>}
-                {loading && <p>Обработка данных...</p>}
-                {error && <p style={{ color: 'red' }}>Ошибка: {error}</p>}
-            </div>
-
-            <hr/>
-            
-            <h2>Карта (Локальная Система Координат)</h2>
-            <p>На карте отображаются буровые скважины (от начальной до конечной точки), пересчитанные в ЛСК.</p>
-            <MapComponent data={data} />
-
-            <hr/>
-
-            {data.length > 0 && (
-                <>
-                    <h2>Обработанные данные ({data.length} записей)</h2>
-                    <div className="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Имя скважины</th>
-                                    <th>X (Лок.)</th>
-                                    <th>Y (Лок.)</th>
-                                    <th>Z (Лок.)</th>
-                                    <th>X (Исходн.)</th>
-                                    <th>Y (Исходн.)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.slice(0, 100).map((item) => ( // Показываем только первые 100 строк для удобства
-                                    <tr key={item.id}>
-                                        <td>{item.HoleName || 'N/A'}</td>
-                                        <td>{item.LocalStartPointX}</td>
-                                        <td>{item.LocalStartPointY}</td>
-                                        <td>{item.LocalStartPointZ}</td>
-                                        <td>{item.RawStartPointX}</td>
-                                        <td>{item.RawStartPointY}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {data.length > 100 && <p>Показаны первые 100 записей.</p>}
-                    </div>
-                </>
-            )}
+  return (
+    <div className="app-container">
+      <header>
+        <h1>Drilling Plan Viewer (ЛСК)</h1>
+      </header>
+      
+      <div className="controls">
+        <input 
+          type="file" 
+          accept=".csv" 
+          onChange={handleFileUpload} 
+          id="csv-upload"
+        />
+        <label htmlFor="csv-upload" className="file-upload-label">
+          {drillHoles.length > 0 
+            ? `Загружено скважин: ${drillHoles.length}. Выбрать другой файл.`
+            : 'Нажмите, чтобы загрузить CSV файл'}
+        </label>
+        
+        {error && <p className="error-message">⚠️ Ошибка: {error}</p>}
+      </div>
+      
+      {drillHoles.length > 0 && mapCenter ? (
+        <MapComponent 
+          holes={drillHoles} 
+          center={mapCenter}
+        />
+      ) : (
+        <div className="initial-message">
+          <p>Загрузите CSV-файл для отображения плана бурения на карте.</p>
         </div>
-    );
+      )}
+    </div>
+  );
 }
 
 export default App;
