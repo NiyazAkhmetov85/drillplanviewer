@@ -1,91 +1,109 @@
 // src/MapComponent.jsx
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css'; // Обязательный импорт CSS для Leaflet
 import L from 'leaflet';
 
-// Исправление проблемы с иконками Leaflet по умолчанию в React
+// --- НАСТРОЙКА LEAFLET ---
+// 1. Исправление проблемы с иконками Leaflet по умолчанию в React/Webpack
 delete L.Icon.Default.prototype._getIconUrl;
-
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
     iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
     shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-// Нам нужно отобразить буровые как линии на карте.
-// Каждая линия - это путь от LocalStartPoint до LocalEndPoint.
+// 2. Пользовательский синий маркер для конца скважины
+const endMarkerIcon = new L.DivIcon({ 
+    className: 'end-marker', 
+    html: '<div style="background-color: blue; width: 8px; height: 8px; border-radius: 50%;"></div>',
+    iconSize: [8, 8],
+    iconAnchor: [4, 4] // Центрируем маркер
+});
 
+// 3. Компонент для автоматического изменения границ карты при обновлении данных
+const ChangeView = ({ bounds }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (bounds && bounds.length > 1) {
+            // Устанавливаем границы карты, добавляя немного отступа (padding)
+            map.fitBounds(bounds, { padding: [50, 50] }); 
+        }
+    }, [bounds, map]);
+    return null;
+};
+
+// --- ОСНОВНОЙ КОМПОНЕНТ КАРТЫ ---
 const MapComponent = ({ data }) => {
-    if (!data || data.length === 0) {
-        // Базовые координаты (центр участка для пустого состояния)
-        const defaultCenter = [8200, 7500]; 
-        return (
-            <MapContainer 
-                center={defaultCenter} 
-                zoom={14} 
-                scrollWheelZoom={false} 
-                style={{ height: '500px', width: '100%', border: '1px solid #ccc' }}
-                crs={L.CRS.Simple} // Используем простую СК для работы с метрами
-            >
-                <div style={{ padding: '20px', backgroundColor: 'white', opacity: 0.8 }}>
-                    Загрузите файл для отображения данных на карте.
-                </div>
-            </MapContainer>
-        );
-    }
+    // В Leaflet [Lat, Lng] соответствует [Y, X] при использовании L.CRS.Simple
     
     // 1. Получаем все точки для определения границ карты
     const allCoords = data.flatMap(item => [
+        // [Y_Local, X_Local] для начала скважины
         [parseFloat(item.LocalStartPointY), parseFloat(item.LocalStartPointX)],
+        // [Y_Local, X_Local] для конца скважины
         [parseFloat(item.LocalEndPointY), parseFloat(item.LocalEndPointX)]
     ]);
     
-    // Если есть данные, находим центр и границы
-    const bounds = allCoords.length > 0 ? allCoords : [[8200, 7500], [8300, 7600]];
-    const center = [
-        (bounds.reduce((sum, p) => sum + p[0], 0) / bounds.length) || 8200,
-        (bounds.reduce((sum, p) => sum + p[1], 0) / bounds.length) || 7500
-    ];
+    // Находим границы. Если данных нет, используем дефолтные границы (для пустой карты)
+    const bounds = allCoords.length > 0 ? allCoords : [[7000, 4000], [7500, 4500]]; 
+    
+    // Вычисляем приблизительный центр (для начальной установки, если нет bounds)
+    const center = bounds.length > 1 ? [
+        (bounds.reduce((sum, p) => sum + p[0], 0) / bounds.length),
+        (bounds.reduce((sum, p) => sum + p[1], 0) / bounds.length)
+    ] : [7250, 4250];
 
     return (
         <MapContainer 
-            bounds={bounds} // Автоматически устанавливает зум и центр по всем точкам
             center={center}
-            zoom={15} 
+            zoom={13} 
             scrollWheelZoom={true} 
-            style={{ height: '700px', width: '100%' }}
-            crs={L.CRS.Simple} // Используем простую СК для метрических данных (X, Y)
+            style={{ height: '100%', width: '100%' }}
+            // !!! ИСПОЛЬЗУЕМ КАРТЕЗИАНСКУЮ СИСТЕМУ КООРДИНАТ !!!
+            crs={L.CRS.Simple} 
+            maxZoom={20}
+            minZoom={12}
         >
+            {/* Этот компонент автоматически центрирует карту при загрузке новых данных */}
+            <ChangeView bounds={bounds} />
+
+            {/* Базовая подложка (можно убрать, так как CRS.Simple не отображает OSM) */}
+            {/* Мы оставляем TileLayer, чтобы Vercel не ругался на отсутствие children у MapContainer */}
             <TileLayer
-                attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                opacity={0.0} // Скрываем стандартную карту, работаем с простой СК
+                attribution='Drill Plan Viewer (ЛСК)'
+                url="" // Пустая строка или URL, если у вас есть своя карта в метрах
+                opacity={0.0}
             />
 
             {data.map((item, index) => {
+                // Leaflet ожидает [Y, X]
                 const startPoint = [parseFloat(item.LocalStartPointY), parseFloat(item.LocalStartPointX)];
                 const endPoint = [parseFloat(item.LocalEndPointY), parseFloat(item.LocalEndPointX)];
                 const path = [startPoint, endPoint];
                 
-                // Отображаем линию скважины
                 return (
                     <React.Fragment key={index}>
-                        <Polyline positions={path} color="red" weight={3} opacity={0.8} />
+                        {/* 1. Линия скважины (Красный цвет) */}
+                        <Polyline positions={path} color="#dc3545" weight={3} opacity={0.8} />
 
-                        {/* Маркер начала скважины */}
+                        {/* 2. Маркер начала скважины (Стандартный Leaflet маркер) */}
                         <Marker position={startPoint}>
                             <Popup>
-                                **{item.HoleName}** (Начало)<br/>
-                                X: {item.LocalStartPointX}, Y: {item.LocalStartPointY}, Z: {item.LocalStartPointZ}
+                                <strong>{item.HoleName || 'N/A'}</strong> (Начало)<br/>
+                                X: {item.LocalStartPointX} м<br/>
+                                Y: {item.LocalStartPointY} м<br/>
+                                Z: {item.LocalStartPointZ} м
                             </Popup>
                         </Marker>
                         
-                        {/* Маркер конца скважины (можно скрыть или сделать другим цветом) */}
-                        <Marker position={endPoint} icon={new L.DivIcon({ className: 'end-marker', html: '<div style="background-color: blue; width: 8px; height: 8px; border-radius: 50%;"></div>' })}>
+                        {/* 3. Маркер конца скважины (Синяя точка) */}
+                        <Marker position={endPoint} icon={endMarkerIcon}>
                             <Popup>
-                                **{item.HoleName}** (Конец)<br/>
-                                X: {item.LocalEndPointX}, Y: {item.LocalEndPointY}, Z: {item.LocalEndPointZ}
+                                <strong>{item.HoleName || 'N/A'}</strong> (Конец)<br/>
+                                X: {item.LocalEndPointX} м<br/>
+                                Y: {item.LocalEndPointY} м<br/>
+                                Z: {item.LocalEndPointZ} м
                             </Popup>
                         </Marker>
                     </React.Fragment>
