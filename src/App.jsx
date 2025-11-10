@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -16,6 +15,88 @@ const cleanAndParse = (value) => {
     return parseFloat(String(value).replace(',', '.'));
 };
 
+// --- ОСНОВНАЯ ФУНКЦИЯ ОБРАБОТКИ И ТРАНСФОРМАЦИИ ДАННЫХ ---
+const processData = (rawData, setError, setDrillHoles, setLoading) => {
+    try {
+        const processedData = rawData
+            .map((item, index) => {
+                // Приводим все ключи к стандартизированному виду для надежности 
+                // (актуально для XLSX, где регистр может быть разным)
+                const standardizedItem = Object.keys(item).reduce((acc, key) => {
+                    // Используем строгие имена полей (XLSX может вернуть разные ключи)
+                    const mapping = {
+                        'HoleName': 'HoleName',
+                        'RawStartPointX': 'RawStartPointX',
+                        'RawStartPointY': 'RawStartPointY',
+                        'RawStartPointZ': 'RawStartPointZ',
+                        'RawEndPointX': 'RawEndPointX',
+                        'RawEndPointY': 'RawEndPointY',
+                        'RawEndPointZ': 'RawEndPointZ',
+                    };
+
+                    for (const standardKey in mapping) {
+                        // Поиск совпадения ключа независимо от регистра
+                        if (String(key).toLowerCase().includes(standardKey.toLowerCase())) {
+                            acc[standardKey] = item[key];
+                        }
+                    }
+                    return acc;
+                }, {});
+
+                // Очистка и парсинг исходных координат
+                const rawStartX = cleanAndParse(standardizedItem.RawStartPointX);
+                const rawStartY = cleanAndParse(standardizedItem.RawStartPointY);
+                const rawStartZ = cleanAndParse(standardizedItem.RawStartPointZ);
+
+                const rawEndX = cleanAndParse(standardizedItem.RawEndPointX);
+                const rawEndY = cleanAndParse(standardizedItem.RawEndPointY);
+                const rawEndZ = cleanAndParse(standardizedItem.RawEndPointZ);
+
+                // Применяем трансформацию Гельмерта к начальной точке (X, Y)
+                const localStartCoords = transformRawToLocal(rawStartX, rawStartY);
+                // Применяем трансформацию Гельмерта к конечной точке (X, Y)
+                const localEndCoords = transformRawToLocal(rawEndX, rawEndY);
+
+                return {
+                    ...standardizedItem,
+                    id: index,
+                    // Добавляем HoleName обратно, так как он используется в таблице
+                    HoleName: standardizedItem.HoleName || 'N/A', 
+                    
+                    // Локальные координаты начала (X, Y - трансформированы, Z - скопирован)
+                    LocalStartPointX: localStartCoords.x.toFixed(3),
+                    LocalStartPointY: localStartCoords.y.toFixed(3),
+                    LocalStartPointZ: rawStartZ.toFixed(3),
+
+                    // Локальные координаты конца (X, Y - трансформированы, Z - скопирован)
+                    LocalEndPointX: localEndCoords.x.toFixed(3),
+                    LocalEndPointY: localEndCoords.y.toFixed(3),
+                    LocalEndPointZ: rawEndZ.toFixed(3),
+                    // Сохраняем исходные паршенные значения для отображения в таблице
+                    RawStartPointX: rawStartX,
+                    RawStartPointY: rawStartY,
+                };
+            })
+            .filter(item =>
+                // Простейшая проверка: не включаем строки, где координаты стали (0,0)
+                item.RawStartPointX !== 0 || item.RawStartPointY !== 0
+            );
+
+        if (processedData.length === 0) {
+            setError('Не найдено валидных данных с координатами для отображения.');
+            setDrillHoles([]);
+        } else {
+            setDrillHoles(processedData);
+        }
+
+    } catch (e) {
+        setError(`Ошибка обработки данных или трансформации координат: ${e.message}`);
+        console.error("Processing Error:", e);
+    } finally {
+        setLoading(false);
+    }
+};
+
 function App() {
     const [drillHoles, setDrillHoles] = useState([]);
     const [error, setError] = useState(null);
@@ -31,78 +112,92 @@ function App() {
         setFileName(file.name);
         setDrillHoles([]);
 
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            dynamicTyping: false,
-            delimiter: ',', // Предполагаем разделитель-запятую (стандарт для CSV)
-            
-            complete: (results) => {
-                if (results.errors.length) {
-                    setError(`Ошибка парсинга CSV: ${results.errors[0].message}`);
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+
+        if (fileExtension === 'csv') {
+            // --- CSV PARSING LOGIC (using PapaParse) ---
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                // Предполагаем разделитель-запятую, но PapaParse умеет авто-детектировать, если не указано
+                complete: (results) => {
+                    if (results.errors.length) {
+                        setError(`Ошибка парсинга CSV: ${results.errors[0].message}`);
+                        setLoading(false);
+                        return;
+                    }
+                    processData(results.data, setError, setDrillHoles, setLoading);
+                },
+                error: (err) => {
+                    setError(`Ошибка чтения файла: ${err.message}`);
                     setLoading(false);
-                    return;
                 }
+            });
+        } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+            // --- XLSX/XLS PARSING LOGIC (using XLSX) ---
+            const reader = new FileReader();
 
+            reader.onload = (e) => {
                 try {
-                    const processedData = results.data
-                        .map((item, index) => {
-                            // Очистка и парсинг исходных координат
-                            const rawStartX = cleanAndParse(item.RawStartPointX);
-                            const rawStartY = cleanAndParse(item.RawStartPointY);
-                            const rawStartZ = cleanAndParse(item.RawStartPointZ);
-                            
-                            const rawEndX = cleanAndParse(item.RawEndPointX);
-                            const rawEndY = cleanAndParse(item.RawEndPointY);
-                            const rawEndZ = cleanAndParse(item.RawEndPointZ);
+                    const data = new Uint8Array(e.target.result);
+                    // Читаем рабочий лист
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    // Получаем имя первой вкладки
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    // Используем header: 1 для получения массива массивов: [ [header1, header2], [data1, data2], ... ]
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }); 
 
-                            // Применяем трансформацию Гельмерта к начальной точке (X, Y)
-                            const localStartCoords = transformRawToLocal(rawStartX, rawStartY);
-                            // Применяем трансформацию Гельмерта к конечной точке (X, Y)
-                            const localEndCoords = transformRawToLocal(rawEndX, rawEndY);
+                    // Предполагаем, что первая строка содержит заголовки, а остальное — данные.
+                    if (jsonData.length === 0) {
+                        setError('Файл Excel пуст или не содержит корректных данных.');
+                        setLoading(false);
+                        return;
+                    }
+                    
+                    // Преобразуем массив массивов обратно в массив объектов с заголовками
+                    const headers = jsonData[0];
+                    const dataRows = jsonData.slice(1);
 
-                            return {
-                                ...item,
-                                id: index,
-                                
-                                // Локальные координаты начала (X, Y - трансформированы, Z - скопирован)
-                                LocalStartPointX: localStartCoords.x.toFixed(3),
-                                LocalStartPointY: localStartCoords.y.toFixed(3),
-                                LocalStartPointZ: rawStartZ.toFixed(3),
-                                
-                                // Локальные координаты конца (X, Y - трансформированы, Z - скопирован)
-                                LocalEndPointX: localEndCoords.x.toFixed(3),
-                                LocalEndPointY: localEndCoords.y.toFixed(3),
-                                LocalEndPointZ: rawEndZ.toFixed(3),
-                            };
-                        })
-                        .filter(item => 
-                            // Простейшая проверка: не включаем строки, где координаты стали (0,0)
-                            cleanAndParse(item.RawStartPointX) !== 0 || cleanAndParse(item.RawStartPointY) !== 0
-                        );
+                    const dataObjects = dataRows.map(row => {
+                        const obj = {};
+                        headers.forEach((header, index) => {
+                            // Очищаем ключи от лишних пробелов, если они есть
+                            obj[String(header).trim()] = row[index];
+                        });
+                        return obj;
+                    }).filter(obj => Object.keys(obj).length > 0); // Удаляем пустые строки
 
-                    if (processedData.length === 0) {
-                        setError('Не найдено валидных данных с координатами для отображения.');
-                        setDrillHoles([]);
-                    } else {
-                        setDrillHoles(processedData);
+                    if (dataObjects.length === 0) {
+                        setError('Файл Excel содержит только заголовки или не содержит данных.');
+                        setLoading(false);
+                        return;
                     }
 
+                    processData(dataObjects, setError, setDrillHoles, setLoading);
+
                 } catch (e) {
-                    setError(`Ошибка обработки данных или трансформации координат: ${e.message}`);
-                    console.error("Processing Error:", e);
-                } finally {
+                    setError(`Ошибка парсинга Excel: ${e.message}. Убедитесь, что заголовки находятся в первой строке.`);
                     setLoading(false);
+                    console.error("XLSX Parsing Error:", e);
                 }
-            },
-            error: (err) => {
-                setError(`Ошибка чтения файла: ${err.message}`);
+            };
+
+            reader.onerror = (e) => {
+                setError(`Ошибка чтения файла (FileReader): ${e.target.error.message}`);
                 setLoading(false);
-            }
-        });
+            };
+
+            reader.readAsArrayBuffer(file);
+        } else {
+             setError(`Неподдерживаемый формат файла: ${fileExtension}. Поддерживаются только CSV, XLSX и XLS.`);
+             setLoading(false);
+        }
     };
 
-    // --- 3. ИНТЕРФЕЙС И ОТОБРАЖЕНИЕ ---
+    // --- ИНТЕРФЕЙС И ОТОБРАЖЕНИЕ ---
     return (
         <div className="app-container">
             <header>
@@ -112,17 +207,17 @@ function App() {
             <div className="controls">
                 <input 
                     type="file" 
-                    accept=".csv" 
+                    accept=".csv,.xlsx,.xls" // Добавили XLSX/XLS
                     onChange={handleFileUpload} 
                     disabled={loading}
-                    id="csv-upload"
+                    id="file-upload"
                 />
-                <label htmlFor="csv-upload" className="file-upload-label">
+                <label htmlFor="file-upload" className="file-upload-label">
                     {loading 
                         ? 'Обработка данных...' 
                         : drillHoles.length > 0 
                             ? `Загружено ${drillHoles.length} скважин. Выбрать другой файл.`
-                            : fileName ? `Файл ${fileName} загружен. Загрузить новый.` : 'Нажмите, чтобы загрузить CSV файл'}
+                            : fileName ? `Файл ${fileName} загружен. Загрузить новый.` : 'Нажмите, чтобы загрузить CSV, XLSX или XLS файл'}
                 </label>
                 
                 {error && <p className="error-message">⚠️ Ошибка: {error}</p>}
@@ -136,7 +231,7 @@ function App() {
             ) : (
                 !loading && !error && (
                     <div className="initial-message">
-                        <p>Загрузите CSV-файл с паспортами бурения для отображения плана на карте (Локальная СК).</p>
+                        <p>Загрузите CSV/XLSX/XLS-файл с паспортами бурения для отображения плана на карте (Локальная СК).</p>
                     </div>
                 )
             )}
@@ -165,8 +260,8 @@ function App() {
                                         <td>{item.LocalStartPointX}</td>
                                         <td>{item.LocalStartPointY}</td>
                                         <td>{item.LocalStartPointZ}</td>
-                                        <td>{cleanAndParse(item.RawStartPointX).toFixed(3)}</td>
-                                        <td>{cleanAndParse(item.RawStartPointY).toFixed(3)}</td>
+                                        <td>{item.RawStartPointX.toFixed(3)}</td>
+                                        <td>{item.RawStartPointY.toFixed(3)}</td>
                                     </tr>
                                 ))}
                             </tbody>
