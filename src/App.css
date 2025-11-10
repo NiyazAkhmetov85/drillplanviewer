@@ -1,109 +1,40 @@
 /* src/App.css */
 
-/* Общие стили и сброс */
-:root {
-  --primary-color: #007bff;
-  --text-color: #333;
-  --bg-color: #f4f7f9;
-  --border-color: #ddd;
-}
-
-body {
+/* 1. Устанавливаем высоту и ширину для всей страницы */
+html, body, #root {
+  height: 100%;
+  width: 100%;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  overflow: hidden; /* Предотвращает прокрутку всей страницы */
 }
 
-/* 1. Главный контейнер приложения */
+/* 2. Контейнер для всего приложения (App) */
 .app-container {
-  max-width: 1200px;
-  margin: 20px auto;
-  padding: 0 20px;
-  background-color: white;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-}
-
-/* Заголовок */
-header {
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border-color);
-  text-align: center;
-}
-
-header h1 {
-  margin: 0;
-  color: var(--primary-color);
-  font-size: 1.8em;
-}
-
-/* 2. Контейнер для загрузки файлов и сообщений */
-.controls {
-  padding: 20px 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-/* Стилизация кнопки/лейбла для загрузки файла */
-#csv-upload {
-  /* Скрываем стандартный input type="file" */
-  opacity: 0;
-  position: absolute;
-  z-index: -1;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-
-.file-upload-label {
-  display: inline-block;
-  padding: 10px 20px;
-  background-color: var(--primary-color);
-  color: white;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-weight: bold;
-  text-align: center;
-}
-
-.file-upload-label:hover {
-  background-color: #0056b3;
-}
-
-/* 3. Карта */
-/* !!! КРИТИЧЕСКИ ВАЖНО для Leaflet, чтобы карта имела высоту !!! */
-.map-container {
-  /* Контейнер для MapComponent */
-  height: 600px; 
+  height: 100%;
   width: 100%;
-  margin: 20px 0;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
 }
 
-/* Сообщения */
-.initial-message {
-  text-align: center;
-  padding: 50px 0;
-  color: #6c757d;
-  font-style: italic;
+/* 3. Контейнер для загрузчика (Uploader) */
+.uploader-area {
+  padding: 15px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
 }
 
-.error-message {
-  color: #dc3545;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  padding: 10px;
-  border-radius: 4px;
-  width: 90%;
-  text-align: center;
+/* 4. Контейнер для карты (CRITICAL!) */
+.map-area {
+  flex-grow: 1; /* Заставляет область карты занять все доступное пространство */
+  height: 100%; 
+  min-height: 0; /* Важно для flex-контейнеров */
 }
 
-/* Сброс/Удаление старых, ненужных стилей (table-wrapper, table, th, td) */
-/* Эти селекторы удалены, чтобы не загрязнять файл стилей */
+/* 5. Контейнер Leaflet */
+.leaflet-container {
+    height: 100%; /* Карта должна заполнить родительский .map-area */
+    width: 100%;
+    /* Если вы используете src/index.css, убедитесь, что этот стиль есть и там */
+}
