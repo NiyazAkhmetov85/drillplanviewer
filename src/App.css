@@ -1,40 +1,67 @@
 /* src/App.css */
 
-/* 1. Устанавливаем высоту и ширину для всей страницы */
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden; /* Предотвращает прокрутку всей страницы */
-}
-
-/* 2. Контейнер для всего приложения (App) */
+/* 1. Общие стили для всего приложения (App) */
 .app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-}
-
-/* 3. Контейнер для загрузчика (Uploader) */
-.uploader-area {
-  padding: 15px;
-  background-color: #ffffff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-/* 4. Контейнер для карты (CRITICAL!) */
-.map-area {
-  flex-grow: 1; /* Заставляет область карты занять все доступное пространство */
-  height: 100%; 
-  min-height: 0; /* Важно для flex-контейнеров */
-}
-
-/* 5. Контейнер Leaflet */
-.leaflet-container {
-    height: 100%; /* Карта должна заполнить родительский .map-area */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     width: 100%;
-    /* Если вы используете src/index.css, убедитесь, что этот стиль есть и там */
+    /* margin, padding, overflow: hidden уже должны быть в index.css/main.jsx,
+       но оставляем здесь для полноты */
+}
+
+/* 2. Контейнер для элементов управления (Controls) */
+/* В .App.jsx используется класс .controls */
+.controls {
+    padding: 15px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+/* 3. Контейнер для карты (CRITICAL!) */
+/* В .App.jsx используется класс .map-container */
+.map-container {
+    flex-grow: 1; /* Заставляет область карты занять все доступное пространство */
+    /* Убираем height: 100%; т.к. flex-grow: 1 уже это делает,
+       но можно оставить, если родительский элемент не flex */
+    height: 100%; 
+    min-height: 0; /* Важно для корректной работы flex-grow в некоторых браузерах */
+}
+
+/* 4. Контейнер Leaflet */
+/* Этот класс применяется к DOM-элементу, созданному Leaflet внутри .map-container */
+.leaflet-container {
+    height: 100%; /* Карта должна заполнить родительский .map-container */
+    width: 100%;
+    /* Если этот стиль уже есть в src/index.css, можно его здесь удалить */
+}
+
+/* Дополнительные стили для элементов интерфейса, определенных в App.jsx */
+.error-message {
+    color: #cc0000;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.initial-message {
+    padding: 20px;
+    text-align: center;
+    color: #555;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+table th, table td {
+    border: 1px solid #eee;
+    padding: 8px;
+    text-align: left;
+    font-size: 0.9em;
 }
