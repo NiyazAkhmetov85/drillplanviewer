@@ -1,11 +1,13 @@
-// viewer-app/src/utils/geo.js
+// src/utils/geo.js
 
 // --- КОНСТАНТЫ ТРАНСФОРМАЦИИ ---
 const TX = 4458.9140; // Сдвиг по X
 const TY = 7317.3475; // Сдвиг по Y
-const ROT_GON = 398.9098; // Поворот в гонах
 
-// Преобразование гон в радианы
+// Поворот в гонах (398.9098 гон)
+const ROT_GON = 398.9098; 
+
+// Преобразование гон в радианы (Looker Studio/JS используют радианы)
 const R_RAD = (ROT_GON - 400.0) * (Math.PI / 200.0);
 const COS_R = Math.cos(R_RAD);
 const SIN_R = Math.sin(R_RAD);
