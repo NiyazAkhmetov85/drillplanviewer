@@ -1,6 +1,12 @@
-/* src/index.css (Базовый сброс стилей) */
-body {
+/* src/index.css (ОБЯЗАТЕЛЬНЫЕ СТИЛИ ДЛЯ ПОЛНОЭКРАННОГО ПРИЛОЖЕНИЯ) */
+html, body, #root {
+    height: 100%; /* <-- КРИТИЧЕСКИ ВАЖНО */
+    width: 100%;
     margin: 0;
+    padding: 0;
+}
+
+body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
