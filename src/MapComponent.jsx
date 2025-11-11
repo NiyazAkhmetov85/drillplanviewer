@@ -1,140 +1,92 @@
 // src/MapComponent.jsx
-import React, { useMemo, useRef, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
-import * as THREE from 'three';
+import React, { useEffect } from 'react';
+import { MapContainer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-// Маленькие параметры
-const SPHERE_RADIUS = 30;
-const END_SPHERE_RADIUS = 10;
-const LINE_RADIUS = 4;
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+});
 
-function HolesScene({ data }) {
-  const groupRef = useRef();
+const endMarkerIcon = new L.DivIcon({
+  className: 'end-marker',
+  html: '<div style="background-color: blue; width: 8px; height: 8px; border-radius: 50%;"></div>',
+  iconSize: [8, 8],
+  iconAnchor: [4, 4],
+});
 
-  // Получаем bbox и центр
-  const { bbox, center } = useMemo(() => {
-    if (!data || data.length === 0) return { bbox: null, center: [0, 0, 0] };
-    const xs = [], ys = [], zs = [];
-    data.forEach(d => {
-      xs.push(d.LocalStartPointX, d.LocalEndPointX);
-      ys.push(d.LocalStartPointY, d.LocalEndPointY);
-      zs.push(d.LocalStartPointZ, d.LocalEndPointZ);
-    });
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-    return { bbox: { minX, maxX, minY, maxY, minZ, maxZ }, center: [centerX, centerY, centerZ] };
-  }, [data]);
+const ChangeView = ({ bounds }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds?.length > 1) map.fitBounds(bounds, { padding: [100, 100] });
+  }, [bounds, map]);
+  return null;
+};
 
-  // небольшой анимационный поворот группы (можно удалить)
-  useFrame(() => {
-    //groupRef.current.rotation.y += 0.000; // по необходимости
-  });
+const GridOverlay = ({ bounds, step = 5 }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (!bounds) return;
+    const [[yMin, xMin], [yMax, xMax]] = bounds;
+    for (let x = xMin; x <= xMax; x += step)
+      L.polyline([[yMin, x], [yMax, x]], { color: 'gray', weight: 0.3, opacity: 0.5 }).addTo(map);
+    for (let y = yMin; y <= yMax; y += step)
+      L.polyline([[y, xMin], [y, xMax]], { color: 'gray', weight: 0.3, opacity: 0.5 }).addTo(map);
+  }, [bounds, map]);
+  return null;
+};
 
-  if (!data || data.length === 0) {
-    return (
-      <mesh>
-        <Html center>
-          <div style={{ padding: 12, background: 'rgba(255,255,255,0.9)', borderRadius: 6 }}>Загрузите файл для отображения 3D сцены</div>
-        </Html>
-      </mesh>
-    );
-  }
+const MapComponent = ({ data }) => {
+  if (!data?.length) return null;
+
+  const allCoords = data.flatMap(d => [
+    [parseFloat(d.DisplayY), parseFloat(d.DisplayX)],
+    [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)],
+  ]);
+
+  const bounds = L.latLngBounds(allCoords);
+  const center = bounds.getCenter();
 
   return (
-    <group ref={groupRef}>
-      {/* Сетка: размер — чуть больше чем span, деление — 1000 м */}
-      <gridHelper
-        args={[
-          Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) + 2000, // size
-          Math.ceil((Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) + 2000) / 1000), // divisions
-        ]}
-        position={[center[0], center[1], center[2]]}
-      />
-
-      {/* Оси для наглядности */}
-      <axesHelper args={[2000]} position={[center[0], center[1], center[2]]} />
-
-      {/* Отрисовка каждой скважины: линия + два маркера */}
-      {data.map((item, idx) => {
-        const start = new THREE.Vector3(item.LocalStartPointX, item.LocalStartPointY, item.LocalStartPointZ);
-        const end = new THREE.Vector3(item.LocalEndPointX, item.LocalEndPointY, item.LocalEndPointZ);
-
-        // линия как BufferGeometry
-        const lineGeom = new THREE.BufferGeometry().setFromPoints([start, end]);
-
+    <MapContainer
+      center={[center.lat, center.lng]}
+      zoom={18}
+      crs={L.CRS.Simple}
+      minZoom={0}
+      maxZoom={30}
+      scrollWheelZoom={true}
+      style={{ height: '600px', width: '100%' }}
+    >
+      <ChangeView bounds={bounds} />
+      <GridOverlay bounds={bounds} step={5} />
+      {data.map((item, index) => {
+        const start = [parseFloat(item.DisplayY), parseFloat(item.DisplayX)];
+        const end = [parseFloat(item.DisplayEndY), parseFloat(item.DisplayEndX)];
         return (
-          <group key={idx}>
-            {/* линия */}
-            <line geometry={lineGeom} position={[0,0,0]}>
-              <lineBasicMaterial attach="material" color="#ff4d4f" linewidth={2} />
-            </line>
-
-            {/* стартовая точка — большая сфера */}
-            <mesh position={[start.x, start.y, start.z]}>
-              <sphereGeometry args={[SPHERE_RADIUS, 12, 12]} />
-              <meshStandardMaterial metalness={0.1} roughness={0.7} color="#007bff" />
-              <Html distanceFactor={10} position={[0, 0, SPHERE_RADIUS + 10]}>
-                <div style={{ background: 'rgba(255,255,255,0.9)', padding: '4px 6px', borderRadius: 4, fontSize: 12 }}>
-                  {item.HoleName || `H${idx}`}<br />
-                  X:{item.LocalStartPointX.toFixed(1)}<br/>
-                  Y:{item.LocalStartPointY.toFixed(1)}<br/>
-                  Z:{item.LocalStartPointZ.toFixed(1)}
-                </div>
-              </Html>
-            </mesh>
-
-            {/* конечная точка — маленькая синяя */}
-            <mesh position={[end.x, end.y, end.z]}>
-              <sphereGeometry args={[END_SPHERE_RADIUS, 8, 8]} />
-              <meshStandardMaterial color="#1e88e5" />
-              <Html distanceFactor={10} position={[0, 0, END_SPHERE_RADIUS + 6]}>
-                <div style={{ background: 'rgba(255,255,255,0.9)', padding: '3px 5px', borderRadius: 4, fontSize: 11 }}>
-                  End
-                </div>
-              </Html>
-            </mesh>
-          </group>
+          <React.Fragment key={index}>
+            <Polyline positions={[start, end]} color="#dc3545" weight={2} />
+            <Marker position={start}>
+              <Popup>
+                <strong>{item.HoleName}</strong><br />
+                X: {item.LocalStartPointX}<br />
+                Y: {item.LocalStartPointY}
+              </Popup>
+            </Marker>
+            <Marker position={end} icon={endMarkerIcon}>
+              <Popup>
+                <strong>{item.HoleName}</strong> (конец)<br />
+                X: {item.LocalEndPointX}<br />
+                Y: {item.LocalEndPointY}
+              </Popup>
+            </Marker>
+          </React.Fragment>
         );
       })}
-    </group>
+    </MapContainer>
   );
-}
+};
 
-export default function MapComponent({ data }) {
-  // центр сцены определяется по bbox в HolesScene
-  const { center } = useMemo(() => {
-    if (!data || data.length === 0) return { center: [0,0,0] };
-    const xs = [], ys = [], zs = [];
-    data.forEach(d => {
-      xs.push(d.LocalStartPointX, d.LocalEndPointX);
-      ys.push(d.LocalStartPointY, d.LocalEndPointY);
-      zs.push(d.LocalStartPointZ, d.LocalEndPointZ);
-    });
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-    return { center: [centerX, centerY, centerZ] };
-  }, [data]);
-
-  // стартовая камера: смещаем вверх и назад по Z для хорошего вида
-  const cameraPosition = [center[0], center[1] - 3000, center[2] + 2000];
-
-  return (
-    <Canvas camera={{ position: cameraPosition, fov: 50, near: 0.1, far: 1e7 }}>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[0, -1, 1]} intensity={0.8} />
-
-      <HolesScene data={data} />
-
-      <OrbitControls />
-    </Canvas>
-  );
-}
+export default MapComponent;
