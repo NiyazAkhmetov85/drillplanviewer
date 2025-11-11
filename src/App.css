@@ -1,17 +1,14 @@
 /* src/App.css */
 
 /* 1. Общие стили для всего приложения (App) */
-.app-container {
+.App { /* Используем класс .App, как в App.jsx */
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 100vh; /* Используем 100vh, чтобы приложение занимало всю высоту экрана */
     width: 100%;
-    /* margin, padding, overflow: hidden уже должны быть в index.css/main.jsx,
-       но оставляем здесь для полноты */
 }
 
 /* 2. Контейнер для элементов управления (Controls) */
-/* В .App.jsx используется класс .controls */
 .controls {
     padding: 15px;
     background-color: #ffffff;
@@ -19,44 +16,70 @@
     z-index: 1000;
 }
 
-/* 3. Контейнер для карты (CRITICAL!) */
-/* В .App.jsx используется класс .map-container */
-.map-container {
+/* 3. Контейнер для статистики */
+.stats {
+    padding: 0 15px 15px 15px;
+}
+
+/* 4. Контейнер для карты (CRITICAL!) */
+/* В .App.jsx используется класс .map-section */
+.map-section {
     flex-grow: 1; /* Заставляет область карты занять все доступное пространство */
-    /* Убираем height: 100%; т.к. flex-grow: 1 уже это делает,
-       но можно оставить, если родительский элемент не flex */
-    height: 100%; 
-    min-height: 0; /* Важно для корректной работы flex-grow в некоторых браузерах */
+    padding: 15px;
+    min-height: 0; /* Важно для корректной работы flex-grow */
 }
 
-/* 4. Контейнер Leaflet */
-/* Этот класс применяется к DOM-элементу, созданному Leaflet внутри .map-container */
-.leaflet-container {
-    height: 100%; /* Карта должна заполнить родительский .map-container */
-    width: 100%;
-    /* Если этот стиль уже есть в src/index.css, можно его здесь удалить */
-}
+/* 5. Стили для элементов карты (MapComponent) */
 
-/* Дополнительные стили для элементов интерфейса, определенных в App.jsx */
-.error-message {
-    color: #cc0000;
+/* Leaflet использует .leaflet-pane для контейнеров */
+/* Стили для номеров скважин */
+.well-label {
+    /* Базовые стили */
+    font-size: 11px;
     font-weight: bold;
-    margin-top: 10px;
+    color: #000;
+    white-space: nowrap; /* Гарантирует, что номер не переносится */
+    /* Улучшение читаемости на фоне карты */
+    text-shadow: 0 0 3px #fff;
+    pointer-events: none; /* Чтобы не мешать кликать по маркеру */
 }
 
-.initial-message {
-    padding: 20px;
+/* Стили для меток осей (номеров разделителей) */
+.axis-label {
+    font-size: 10px;
+    font-weight: bold;
+    color: #444;
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+}
+
+/* Смещение меток Y к левому краю (Y-axis) */
+.y-axis-label {
+    /* Leaflet позиционирует маркер, а div-icon должен сместить содержимое */
+    transform: translateX(-100%); 
+    padding-right: 5px;
+    text-align: right;
+}
+
+/* Смещение меток X к нижнему краю (X-axis) */
+.x-axis-label {
+    transform: translateY(100%); 
+    padding-top: 5px;
     text-align: center;
-    color: #555;
 }
 
-.table-wrapper {
-    overflow-x: auto;
-    margin: 20px;
+/* 6. Дополнительные стили для элементов интерфейса, определенных в App.jsx */
+
+.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 1.2em;
+    color: #999;
 }
 
 table {
-    width: 100%;
+    width: auto; /* Лучше, чем 100% для небольших таблиц статистики */
     border-collapse: collapse;
 }
 table th, table td {
@@ -64,4 +87,10 @@ table th, table td {
     padding: 8px;
     text-align: left;
     font-size: 0.9em;
+}
+
+/* Стили для секции заголовка и кнопок */
+header h1 {
+    font-size: 1.5em;
+    margin-bottom: 0.5em;
 }
