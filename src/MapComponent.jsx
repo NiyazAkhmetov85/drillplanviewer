@@ -60,8 +60,14 @@ const MapComponent = ({ data }) => {
     const gridSize = 50; // шаг сетки в метрах
     const gridLayer = L.layerGroup();
 
-    const [minY, minX] = bounds.getSouthWest();
-    const [maxY, maxX] = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    
+    const minY = sw.lat;
+    const minX = sw.lng;
+    const maxY = ne.lat;
+    const maxX = ne.lng;
+
 
     for (let x = minX; x <= maxX; x += gridSize) {
       const line = L.polyline(
