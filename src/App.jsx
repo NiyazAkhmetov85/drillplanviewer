@@ -29,12 +29,12 @@ function App() {
 
       // === Проверяем наличие ключевых колонок ===
       const requiredFields = [
-        "StartPointX",
-        "StartPointY",
-        "StartPointZ",
-        "EndPointX",
-        "EndPointY",
-        "EndPointZ",
+        "RawStartPointX",
+        "RawStartPointY",
+        "RawStartPointZ",
+        "RawEndPointX",
+        "RawEndPointY",
+        "RawEndPointZ",
       ];
 
       const valid = json.every((row) =>
