@@ -9,6 +9,18 @@ function App() {
   const [fileName, setFileName] = useState(null);
   const [stats, setStats] = useState(null);
 
+  // === Вспомогательная функция для безопасного парсинга чисел ===
+  // Корректно обрабатывает десятичные разделители (запятую или точку)
+  const safeParseFloat = (value) => {
+    if (typeof value === "string") {
+      // Заменяем запятую на точку перед парсингом, если она присутствует
+      const cleanedValue = value.replace(",", ".");
+      return parseFloat(cleanedValue);
+    }
+    // Если это уже число, или null/undefined, просто пытаемся парсить
+    return parseFloat(value);
+  };
+
   // === Обработка импорта файлов Excel/CSV ===
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -27,14 +39,14 @@ function App() {
       console.log("📘 Импортировано строк:", json.length);
       console.log("Пример данных:", json[0]);
 
-      // === Упрощенная проверка наличия ключевых колонок (Только X, Y и Имя) ===
+      // === Проверка наличия ключевых колонок (HoleName, RawStartPointX, RawStartPointY) ===
       const requiredFields = [
-        "HoleName", // Используем HoleName как основной ID
+        "HoleName",
         "RawStartPointX",
         "RawStartPointY",
       ];
 
-      // Проверяем, что каждое требуемое поле есть в заголовках первого объекта
+      // Проверяем, что каждое требуемое поле есть в заголовках
       const validHeaders = requiredFields.every((key) => key in (json[0] || {}));
 
       if (!validHeaders) {
@@ -47,26 +59,33 @@ function App() {
         return;
       }
 
-      // === Преобразуем и фильтруем данные (Только Start X/Y) ===
+      // === Преобразуем данные, используя безопасный парсинг ===
       const processed = json.map((row) => ({
         WellName: row.HoleName || "N/A",
-        // Используем RawStartPointX/Y как основные координаты для отображения (Display)
-        DisplayX: parseFloat(row.RawStartPointX),
-        DisplayY: parseFloat(row.RawStartPointY),
-        // Убраны DisplayZ, DisplayEndX, DisplayEndY, DisplayEndZ
+        // Используем safeParseFloat для корректной обработки десятичных разделителей
+        DisplayX: safeParseFloat(row.RawStartPointX),
+        DisplayY: safeParseFloat(row.RawStartPointY),
       }));
 
-      // === Проверка и фильтрация NaN (Только для X и Y) ===
+      // === Проверка и фильтрация NaN ===
       const validData = processed.filter(
         (p) => !isNaN(p.DisplayX) && !isNaN(p.DisplayY)
       );
 
       console.log("✅ Обработано записей:", validData.length);
+      // Если log с предупреждением о пропущенных записях исчезнет или их количество уменьшится, 
+      // значит, проблема с разделителями была устранена.
 
       // === Контроль диапазонов координат (Только X и Y) ===
       const xs = validData.map((d) => d.DisplayX);
       const ys = validData.map((d) => d.DisplayY);
-      // Z больше не используется
+
+      // Проверка на пустой массив для предотвращения ошибки Math.min/max на пустых массивах
+      if (xs.length === 0) {
+        setStats(null);
+        setData([]);
+        return;
+      }
 
       const stats = {
         minX: Math.min(...xs).toFixed(3),
@@ -75,10 +94,8 @@ function App() {
         minY: Math.min(...ys).toFixed(3),
         maxY: Math.max(...ys).toFixed(3),
         spanY: (Math.max(...ys) - Math.min(...ys)).toFixed(3),
-        // Z-координаты убраны
         centerX: (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1),
         centerY: (ys.reduce((a, b) => a + b, 0) / ys.length).toFixed(1),
-        // centerZ убран
       };
 
       setStats(stats);
@@ -114,7 +131,7 @@ function App() {
         )}
       </section>
 
-      {/* Контроль координат (Убраны Z-поля) */}
+      {/* Контроль координат (Только X и Y) */}
       {stats && (
         <section className="stats">
           <h3>Проверка ЛСК (контроль)</h3>
@@ -136,7 +153,6 @@ function App() {
                 <td>span Y</td>
                 <td>{stats.spanY} м</td>
               </tr>
-              {/* Z-строка удалена */}
               <tr>
                 <td colSpan="6">
                   center X,Y → {stats.centerX}, {stats.centerY}
