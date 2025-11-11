@@ -3,9 +3,14 @@ import React, { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// Добавляем поддержку меток (labels) для Leaflet, если они используются
+// Хотя Leaflet.label не подключен, мы будем использовать стандартный L.tooltip 
+// для отображения номеров скважин и L.marker для меток осей.
+// Для простоты используем стандартные возможности Leaflet.
+
 const MapComponent = ({ data }) => {
   useEffect(() => {
-    // Очистка старой карты, если компонент перерисовывается
+    // Очистка старой карты
     const existingMap = L.DomUtil.get("map");
     if (existingMap && existingMap._leaflet_id) {
       existingMap._leaflet_id = null;
@@ -30,17 +35,14 @@ const MapComponent = ({ data }) => {
       // Leaflet ожидает [lat (Y), lng (X)]
       const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
 
-      // Проверка корректности: должна сработать только если App.jsx пропустил NaN
       if (isNaN(start[0]) || isNaN(start[1])) {
-        // ЭТО ПРЕДУПРЕЖДЕНИЕ БОЛЬШЕ НЕ ДОЛЖНО СРАБАТЫВАТЬ
-        console.warn("⚠️ Пропущена запись с некорректными координатами:", d);
+        // Предупреждение о некорректных координатах (срабатывать не должно)
         return [];
       }
 
-      return [start]; // Возвращаем только стартовую точку
+      return [start]; 
     });
 
-    // Если координаты невалидны — выходим
     if (allCoords.length === 0) {
       console.error("❌ Нет валидных координат для отображения!");
       map.setView([0, 0], 1);
@@ -49,14 +51,7 @@ const MapComponent = ({ data }) => {
 
     // --- Определяем границы ---
     const bounds = L.latLngBounds(allCoords);
-    const center = bounds.getCenter();
-
-    // --- Устанавливаем вид ---
-    map.fitBounds(bounds.pad(0.2)); // чуть больше границ
-
-    // --- Добавляем визуальную сетку для контроля ЛСК ---
-    const gridSize = 50; // шаг сетки в метрах
-    const gridLayer = L.layerGroup();
+    map.fitBounds(bounds.pad(0.15)); // чуть больше границ
 
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
@@ -66,50 +61,81 @@ const MapComponent = ({ data }) => {
     const maxY = ne.lat;
     const maxX = ne.lng;
 
+    // --- Добавляем визуальную сетку (Разделители) ---
+    const gridSize = 50; // шаг сетки в метрах
+    const gridLayer = L.layerGroup();
+    const axisLabelsLayer = L.layerGroup();
 
+    // Сетка по X и Y
     for (let x = minX; x <= maxX; x += gridSize) {
       const line = L.polyline(
-        [
-          [minY, x],
-          [maxY, x],
-        ],
+        [ [minY, x], [maxY, x] ],
         { color: "#ccc", weight: 1, opacity: 0.3 }
       );
       gridLayer.addLayer(line);
+      
+      // Метка оси X внизу
+      L.marker([minY, x], { // Используем маркер для позиционирования метки
+          icon: L.divIcon({
+              className: 'axis-label x-axis-label',
+              html: Math.round(x).toString(), // Номер разделителя
+              iconSize: [0, 0]
+          })
+      }).addTo(axisLabelsLayer);
     }
 
     for (let y = minY; y <= maxY; y += gridSize) {
       const line = L.polyline(
-        [
-          [y, minX],
-          [y, maxX],
-        ],
+        [ [y, minX], [y, maxX] ],
         { color: "#ccc", weight: 1, opacity: 0.3 }
       );
       gridLayer.addLayer(line);
+
+      // Метка оси Y слева
+      L.marker([y, minX], {
+          icon: L.divIcon({
+              className: 'axis-label y-axis-label',
+              html: Math.round(y).toString(), // Номер разделителя
+              iconSize: [0, 0]
+          })
+      }).addTo(axisLabelsLayer);
     }
 
     gridLayer.addTo(map);
+    axisLabelsLayer.addTo(map);
 
-    // --- Отрисовываем скважины (только устья) ---
+
+    // --- Отрисовываем скважины (Устья) ---
     const wellsLayer = L.layerGroup();
 
     data.forEach((d) => {
       const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
 
-      // Отрисовываем только маркер устья
+      // маркер устья
       const marker = L.circleMarker(start, {
         radius: 4,
         color: "#FF0000",
         fillColor: "#FF0000",
         fillOpacity: 1,
       })
+        // Подсказка при наведении
         .bindTooltip(
           `<b>${d.WellName || "Без имени"}</b><br/>
            X: ${d.DisplayX}<br/>
-           Y: ${d.DisplayY}` // Удалена координата Z
+           Y: ${d.DisplayY}`,
+          { permanent: false, sticky: true }
         )
         .addTo(wellsLayer);
+
+      // Метка (Label) с номером скважины (HoleName/WellName)
+      L.marker(start, {
+          icon: L.divIcon({
+              className: 'well-label',
+              html: `<b>${d.WellName || 'N/A'}</b>`, // Номер скважины
+              iconAnchor: [-5, 10] // Смещение, чтобы метка была рядом с маркером
+          })
+      }).addTo(wellsLayer);
+
     });
 
     wellsLayer.addTo(map);
@@ -117,7 +143,6 @@ const MapComponent = ({ data }) => {
     // --- Контроль ЛСК (консоль) ---
     const xs = allCoords.map((p) => p[1]);
     const ys = allCoords.map((p) => p[0]);
-    // Удалены расчеты Z
 
     console.log("✅ Проверка ЛСК (контроль)");
     console.table({
