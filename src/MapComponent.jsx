@@ -1,91 +1,160 @@
 // src/MapComponent.jsx
-import React, { useEffect } from 'react';
-import { MapContainer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-});
-
-const endMarkerIcon = new L.DivIcon({
-  className: 'end-marker',
-  html: '<div style="background-color: blue; width: 8px; height: 8px; border-radius: 50%;"></div>',
-  iconSize: [8, 8],
-  iconAnchor: [4, 4],
-});
-
-const ChangeView = ({ bounds }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (bounds?.length > 1) map.fitBounds(bounds, { padding: [100, 100] });
-  }, [bounds, map]);
-  return null;
-};
-
-const GridOverlay = ({ bounds, step = 5 }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    const [[yMin, xMin], [yMax, xMax]] = bounds;
-    for (let x = xMin; x <= xMax; x += step)
-      L.polyline([[yMin, x], [yMax, x]], { color: 'gray', weight: 0.3, opacity: 0.5 }).addTo(map);
-    for (let y = yMin; y <= yMax; y += step)
-      L.polyline([[y, xMin], [y, xMax]], { color: 'gray', weight: 0.3, opacity: 0.5 }).addTo(map);
-  }, [bounds, map]);
-  return null;
-};
+import React, { useEffect } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 const MapComponent = ({ data }) => {
-  if (!data?.length) return null;
+  useEffect(() => {
+    // Очистка старой карты, если компонент перерисовывается
+    const existingMap = L.DomUtil.get("map");
+    if (existingMap && existingMap._leaflet_id) {
+      existingMap._leaflet_id = null;
+    }
 
-  const allCoords = data.flatMap(d => [
-    [parseFloat(d.DisplayY), parseFloat(d.DisplayX)],
-    [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)],
-  ]);
+    // Создаём карту в локальных координатах (метры)
+    const map = L.map("map", {
+      crs: L.CRS.Simple, // простая 2D-плоскость
+      minZoom: -2,
+      maxZoom: 5,
+    });
 
-  const bounds = L.latLngBounds(allCoords);
-  const center = bounds.getCenter();
+    // --- Проверка входных данных ---
+    if (!data || data.length === 0) {
+      console.warn("⚠️ Нет данных для отображения.");
+      map.setView([0, 0], 1);
+      return;
+    }
+
+    // --- Извлекаем координаты ---
+    const allCoords = data.flatMap((d) => {
+      const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
+      const end = [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)];
+
+      // Проверка корректности
+      if (
+        isNaN(start[0]) || isNaN(start[1]) ||
+        isNaN(end[0]) || isNaN(end[1])
+      ) {
+        console.warn("⚠️ Пропущена запись с некорректными координатами:", d);
+        return [];
+      }
+
+      return [start, end];
+    });
+
+    // Если координаты невалидны — выходим
+    if (allCoords.length === 0) {
+      console.error("❌ Нет валидных координат для отображения!");
+      map.setView([0, 0], 1);
+      return;
+    }
+
+    // --- Определяем границы ---
+    const bounds = L.latLngBounds(allCoords);
+    const center = bounds.getCenter();
+
+    // --- Устанавливаем вид ---
+    map.fitBounds(bounds.pad(0.2)); // чуть больше границ
+
+    // --- Добавляем визуальную сетку для контроля ЛСК ---
+    const gridSize = 50; // шаг сетки в метрах
+    const gridLayer = L.layerGroup();
+
+    const [minY, minX] = bounds.getSouthWest();
+    const [maxY, maxX] = bounds.getNorthEast();
+
+    for (let x = minX; x <= maxX; x += gridSize) {
+      const line = L.polyline(
+        [
+          [minY, x],
+          [maxY, x],
+        ],
+        { color: "#ccc", weight: 1, opacity: 0.3 }
+      );
+      gridLayer.addLayer(line);
+    }
+
+    for (let y = minY; y <= maxY; y += gridSize) {
+      const line = L.polyline(
+        [
+          [y, minX],
+          [y, maxX],
+        ],
+        { color: "#ccc", weight: 1, opacity: 0.3 }
+      );
+      gridLayer.addLayer(line);
+    }
+
+    gridLayer.addTo(map);
+
+    // --- Отрисовываем скважины ---
+    const wellsLayer = L.layerGroup();
+
+    data.forEach((d) => {
+      const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
+      const end = [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)];
+
+      if (
+        isNaN(start[0]) || isNaN(start[1]) ||
+        isNaN(end[0]) || isNaN(end[1])
+      ) return;
+
+      // линия ствола
+      const line = L.polyline([start, end], {
+        color: "#0078FF",
+        weight: 2,
+      }).addTo(wellsLayer);
+
+      // маркер устья
+      const marker = L.circleMarker(start, {
+        radius: 4,
+        color: "#FF0000",
+        fillColor: "#FF0000",
+        fillOpacity: 1,
+      })
+        .bindTooltip(
+          `<b>${d.WellName || "Без имени"}</b><br/>
+          X: ${d.DisplayX}<br/>
+          Y: ${d.DisplayY}<br/>
+          Z: ${d.DisplayZ}`
+        )
+        .addTo(wellsLayer);
+    });
+
+    wellsLayer.addTo(map);
+
+    // --- Контроль ЛСК (консоль) ---
+    const xs = allCoords.map((p) => p[1]);
+    const ys = allCoords.map((p) => p[0]);
+    const zs = data.map((d) => parseFloat(d.DisplayZ)).filter((z) => !isNaN(z));
+
+    console.log("✅ Проверка ЛСК (контроль)");
+    console.table({
+      "min X": Math.min(...xs),
+      "max X": Math.max(...xs),
+      "span X": Math.max(...xs) - Math.min(...xs),
+      "min Y": Math.min(...ys),
+      "max Y": Math.max(...ys),
+      "span Y": Math.max(...ys) - Math.min(...ys),
+      "min Z": Math.min(...zs),
+      "max Z": Math.max(...zs),
+      "span Z": Math.max(...zs) - Math.min(...zs),
+    });
+
+    // Очистка при размонтировании
+    return () => map.remove();
+  }, [data]);
 
   return (
-    <MapContainer
-      center={[center.lat, center.lng]}
-      zoom={18}
-      crs={L.CRS.Simple}
-      minZoom={0}
-      maxZoom={30}
-      scrollWheelZoom={true}
-      style={{ height: '600px', width: '100%' }}
-    >
-      <ChangeView bounds={bounds} />
-      <GridOverlay bounds={bounds} step={5} />
-      {data.map((item, index) => {
-        const start = [parseFloat(item.DisplayY), parseFloat(item.DisplayX)];
-        const end = [parseFloat(item.DisplayEndY), parseFloat(item.DisplayEndX)];
-        return (
-          <React.Fragment key={index}>
-            <Polyline positions={[start, end]} color="#dc3545" weight={2} />
-            <Marker position={start}>
-              <Popup>
-                <strong>{item.HoleName}</strong><br />
-                X: {item.LocalStartPointX}<br />
-                Y: {item.LocalStartPointY}
-              </Popup>
-            </Marker>
-            <Marker position={end} icon={endMarkerIcon}>
-              <Popup>
-                <strong>{item.HoleName}</strong> (конец)<br />
-                X: {item.LocalEndPointX}<br />
-                Y: {item.LocalEndPointY}
-              </Popup>
-            </Marker>
-          </React.Fragment>
-        );
-      })}
-    </MapContainer>
+    <div
+      id="map"
+      style={{
+        height: "85vh",
+        width: "100%",
+        border: "1px solid #999",
+        borderRadius: "8px",
+      }}
+    />
   );
 };
 
