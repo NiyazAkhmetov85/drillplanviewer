@@ -113,4 +113,28 @@ export default function MapComponent({ data }) {
     data.forEach(d => {
       xs.push(d.LocalStartPointX, d.LocalEndPointX);
       ys.push(d.LocalStartPointY, d.LocalEndPointY);
-      zs.push(d.Local
+      zs.push(d.LocalStartPointZ, d.LocalEndPointZ);
+    });
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    return { center: [centerX, centerY, centerZ] };
+  }, [data]);
+
+  // стартовая камера: смещаем вверх и назад по Z для хорошего вида
+  const cameraPosition = [center[0], center[1] - 3000, center[2] + 2000];
+
+  return (
+    <Canvas camera={{ position: cameraPosition, fov: 50, near: 0.1, far: 1e7 }}>
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[0, -1, 1]} intensity={0.8} />
+
+      <HolesScene data={data} />
+
+      <OrbitControls />
+    </Canvas>
+  );
+}
