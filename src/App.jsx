@@ -1,180 +1,181 @@
-import React, { useState } from 'react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import MapComponent from './MapComponent';
-import { normalizeLocalCoords } from './utils/geo';
-import './App.css';
+// src/App.jsx
+import React, { useState } from "react";
+import * as XLSX from "xlsx";
+import MapComponent from "./MapComponent";
+import "./App.css";
 
-// --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ---
-// Очистка и парсинг числового значения
-const cleanAndParse = (value) => {
-  if (value === null || value === undefined || String(value).trim() === '') return 0;
-  return parseFloat(String(value).replace(',', '.'));
-};
-
-// --- ОСНОВНАЯ ОБРАБОТКА ДАННЫХ ---
-const processData = (rawData, setError, setDrillHoles, setStats, setLoading) => {
-  try {
-    const processedData = rawData.map((item, index) => {
-      const mapping = {
-        HoleName: 'HoleName',
-        RawStartPointX: 'RawStartPointX',
-        RawStartPointY: 'RawStartPointY',
-        RawStartPointZ: 'RawStartPointZ',
-        RawEndPointX: 'RawEndPointX',
-        RawEndPointY: 'RawEndPointY',
-        RawEndPointZ: 'RawEndPointZ',
-      };
-
-      // Приведение ключей к стандартному виду (XLSX часто меняет регистр)
-      const standardized = Object.keys(item).reduce((acc, key) => {
-        for (const standardKey in mapping) {
-          if (String(key).toLowerCase().includes(standardKey.toLowerCase())) {
-            acc[standardKey] = item[key];
-          }
-        }
-        return acc;
-      }, {});
-
-      // Читаем координаты — уже в локальной СК
-      const startX = cleanAndParse(standardized.RawStartPointX);
-      const startY = cleanAndParse(standardized.RawStartPointY);
-      const startZ = cleanAndParse(standardized.RawStartPointZ);
-      const endX = cleanAndParse(standardized.RawEndPointX);
-      const endY = cleanAndParse(standardized.RawEndPointY);
-      const endZ = cleanAndParse(standardized.RawEndPointZ);
-
-      return {
-        id: index,
-        HoleName: standardized.HoleName || `Hole_${index + 1}`,
-        LocalStartPointX: startX.toFixed(3),
-        LocalStartPointY: startY.toFixed(3),
-        LocalStartPointZ: startZ.toFixed(3),
-        LocalEndPointX: endX.toFixed(3),
-        LocalEndPointY: endY.toFixed(3),
-        LocalEndPointZ: endZ.toFixed(3),
-      };
-    });
-
-    // Фильтрация пустых строк
-    const validData = processedData.filter(p => p.LocalStartPointX !== 0 || p.LocalStartPointY !== 0);
-    if (validData.length === 0) {
-      setError('Файл не содержит валидных координат скважин.');
-      return;
-    }
-
-    // Нормализация под Leaflet CRS.Simple
-    const normalized = normalizeLocalCoords(validData);
-    setDrillHoles(normalized);
-
-    // Контроль ЛСК
-    const xs = normalized.map(d => parseFloat(d.LocalStartPointX));
-    const ys = normalized.map(d => parseFloat(d.LocalStartPointY));
-    const zs = normalized.map(d => parseFloat(d.LocalStartPointZ));
-
-    setStats({
-      minX: Math.min(...xs),
-      maxX: Math.max(...xs),
-      spanX: Math.max(...xs) - Math.min(...xs),
-      minY: Math.min(...ys),
-      maxY: Math.max(...ys),
-      spanY: Math.max(...ys) - Math.min(...ys),
-      minZ: Math.min(...zs),
-      maxZ: Math.max(...zs),
-      centerX: (Math.max(...xs) + Math.min(...xs)) / 2,
-      centerY: (Math.max(...ys) + Math.min(...ys)) / 2,
-      centerZ: (Math.max(...zs) + Math.min(...zs)) / 2,
-    });
-
-  } catch (e) {
-    setError(`Ошибка обработки данных: ${e.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// --- ОСНОВНОЙ КОМПОНЕНТ ---
 function App() {
-  const [drillHoles, setDrillHoles] = useState([]);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [fileName, setFileName] = useState('');
+  const [data, setData] = useState([]);
+  const [fileName, setFileName] = useState(null);
   const [stats, setStats] = useState(null);
 
+  // === Обработка импорта файлов Excel/CSV ===
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    setLoading(true);
-    setError(null);
     setFileName(file.name);
-    setDrillHoles([]);
 
-    const ext = file.name.split('.').pop().toLowerCase();
-    const handleParsedData = (data) =>
-      processData(data, setError, setDrillHoles, setStats, setLoading);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const arrayBuffer = e.target.result;
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet);
 
-    if (ext === 'csv') {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => handleParsedData(results.data),
-        error: (err) => setError(`Ошибка чтения CSV: ${err.message}`),
-      });
-    } else if (['xlsx', 'xls'].includes(ext)) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet);
-        handleParsedData(json);
+      console.log("📘 Импортировано строк:", json.length);
+      console.log("Пример данных:", json[0]);
+
+      // === Проверяем наличие ключевых колонок ===
+      const requiredFields = [
+        "LocalStartPointX",
+        "LocalStartPointY",
+        "LocalStartPointZ",
+        "LocalEndPointX",
+        "LocalEndPointY",
+        "LocalEndPointZ",
+      ];
+
+      const valid = json.every((row) =>
+        requiredFields.every((key) => key in row)
+      );
+
+      if (!valid) {
+        alert(
+          "❌ Ошибка: файл не содержит необходимых столбцов.\n" +
+            requiredFields.join(", ")
+        );
+        setData([]);
+        return;
+      }
+
+      // === Преобразуем и фильтруем данные ===
+      const processed = json.map((row) => ({
+        WellName: row.HoleName || row.WellName || "N/A",
+        DisplayX: parseFloat(row.LocalStartPointX),
+        DisplayY: parseFloat(row.LocalStartPointY),
+        DisplayZ: parseFloat(row.LocalStartPointZ),
+        DisplayEndX: parseFloat(row.LocalEndPointX),
+        DisplayEndY: parseFloat(row.LocalEndPointY),
+        DisplayEndZ: parseFloat(row.LocalEndPointZ),
+      }));
+
+      // === Проверка и фильтрация NaN ===
+      const validData = processed.filter(
+        (p) =>
+          !isNaN(p.DisplayX) &&
+          !isNaN(p.DisplayY) &&
+          !isNaN(p.DisplayEndX) &&
+          !isNaN(p.DisplayEndY)
+      );
+
+      console.log("✅ Обработано записей:", validData.length);
+
+      // === Контроль диапазонов координат ===
+      const xs = validData.flatMap((d) => [d.DisplayX, d.DisplayEndX]);
+      const ys = validData.flatMap((d) => [d.DisplayY, d.DisplayEndY]);
+      const zs = validData.flatMap((d) => [d.DisplayZ, d.DisplayEndZ]);
+
+      const stats = {
+        minX: Math.min(...xs).toFixed(3),
+        maxX: Math.max(...xs).toFixed(3),
+        spanX: (Math.max(...xs) - Math.min(...xs)).toFixed(3),
+        minY: Math.min(...ys).toFixed(3),
+        maxY: Math.max(...ys).toFixed(3),
+        spanY: (Math.max(...ys) - Math.min(...ys)).toFixed(3),
+        minZ: Math.min(...zs).toFixed(3),
+        maxZ: Math.max(...zs).toFixed(3),
+        spanZ: (Math.max(...zs) - Math.min(...zs)).toFixed(3),
+        centerX: (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1),
+        centerY: (ys.reduce((a, b) => a + b, 0) / ys.length).toFixed(1),
+        centerZ: (zs.reduce((a, b) => a + b, 0) / zs.length).toFixed(1),
       };
-      reader.readAsArrayBuffer(file);
-    } else {
-      setError('Поддерживаются только CSV, XLSX и XLS.');
-      setLoading(false);
-    }
+
+      setStats(stats);
+      setData(validData);
+    };
+
+    reader.readAsArrayBuffer(file);
   };
 
-  // --- ИНТЕРФЕЙС ---
+  const handleClear = () => {
+    setData([]);
+    setFileName(null);
+    setStats(null);
+  };
+
   return (
-    <div className="app-container">
+    <div className="App">
       <header>
-        <h1>Drilling Plan Viewer — Локальная СК (2D вид сверху)</h1>
+        <h1>🛠 Drill Plan Viewer (2D, Local CS)</h1>
       </header>
 
-      <div className="controls">
-        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={loading} />
-        {fileName && <p>Загружен файл: <strong>{fileName}</strong></p>}
-        {error && <p className="error-message">⚠️ {error}</p>}
-      </div>
+      <section className="controls">
+        <input
+          type="file"
+          accept=".xlsx, .xls, .csv"
+          onChange={handleFileUpload}
+        />
+        {fileName && (
+          <div>
+            Загружен блок: <b>{fileName}</b> ({data.length} скважин){" "}
+            <button onClick={handleClear}>Выбрать другой файл</button>
+          </div>
+        )}
+      </section>
 
+      {/* Контроль координат */}
       {stats && (
-        <div className="stats">
+        <section className="stats">
           <h3>Проверка ЛСК (контроль)</h3>
-          <pre>
-{`min X\t${stats.minX.toFixed(3)} м
-max X\t${stats.maxX.toFixed(3)} м
-span X\t${stats.spanX.toFixed(3)} м
-min Y\t${stats.minY.toFixed(3)} м
-max Y\t${stats.maxY.toFixed(3)} м
-span Y\t${stats.spanY.toFixed(3)} м
-min Z\t${stats.minZ.toFixed(3)} м
-max Z\t${stats.maxZ.toFixed(3)} м
-center X,Y,Z\t${stats.centerX.toFixed(1)}, ${stats.centerY.toFixed(1)}, ${stats.centerZ.toFixed(1)}`}
-          </pre>
-          <p className="control-note">
-            Ожидаемый диапазон координат: X ≈ 4000–10000 м, Y ≈ 3000–7000 м.
-            <br />Если значения выходят за диапазон — проверьте столбцы координат.
+          <table>
+            <tbody>
+              <tr>
+                <td>min X</td>
+                <td>{stats.minX} м</td>
+                <td>max X</td>
+                <td>{stats.maxX} м</td>
+                <td>span X</td>
+                <td>{stats.spanX} м</td>
+              </tr>
+              <tr>
+                <td>min Y</td>
+                <td>{stats.minY} м</td>
+                <td>max Y</td>
+                <td>{stats.maxY} м</td>
+                <td>span Y</td>
+                <td>{stats.spanY} м</td>
+              </tr>
+              <tr>
+                <td>min Z</td>
+                <td>{stats.minZ} м</td>
+                <td>max Z</td>
+                <td>{stats.maxZ} м</td>
+                <td>span Z</td>
+                <td>{stats.spanZ} м</td>
+              </tr>
+              <tr>
+                <td colSpan="6">
+                  center X,Y,Z → {stats.centerX}, {stats.centerY}, {stats.centerZ}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ fontSize: "0.9em", color: "#555" }}>
+            Ожидаемый диапазон координат: X ~ 4000–10000 м, Y ~ 3000–7000 м.
+            Если span X/Y ≪ 1 → проверьте масштаб/поворот.
           </p>
-        </div>
+        </section>
       )}
 
-      {drillHoles.length > 0 && (
-        <div className="map-container">
-          <MapComponent data={drillHoles} />
-        </div>
-      )}
+      <section className="map-section">
+        {data.length > 0 ? (
+          <MapComponent data={data} />
+        ) : (
+          <div className="placeholder">Загрузите файл для отображения карты</div>
+        )}
+      </section>
     </div>
   );
 }
