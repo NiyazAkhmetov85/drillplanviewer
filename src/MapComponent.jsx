@@ -25,21 +25,19 @@ const MapComponent = ({ data }) => {
       return;
     }
 
-    // --- Извлекаем координаты ---
+    // --- Извлекаем координаты (только стартовые точки) ---
     const allCoords = data.flatMap((d) => {
+      // Leaflet ожидает [lat (Y), lng (X)]
       const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
-      const end = [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)];
 
-      // Проверка корректности
-      if (
-        isNaN(start[0]) || isNaN(start[1]) ||
-        isNaN(end[0]) || isNaN(end[1])
-      ) {
+      // Проверка корректности: должна сработать только если App.jsx пропустил NaN
+      if (isNaN(start[0]) || isNaN(start[1])) {
+        // ЭТО ПРЕДУПРЕЖДЕНИЕ БОЛЬШЕ НЕ ДОЛЖНО СРАБАТЫВАТЬ
         console.warn("⚠️ Пропущена запись с некорректными координатами:", d);
         return [];
       }
 
-      return [start, end];
+      return [start]; // Возвращаем только стартовую точку
     });
 
     // Если координаты невалидны — выходим
@@ -93,25 +91,13 @@ const MapComponent = ({ data }) => {
 
     gridLayer.addTo(map);
 
-    // --- Отрисовываем скважины ---
+    // --- Отрисовываем скважины (только устья) ---
     const wellsLayer = L.layerGroup();
 
     data.forEach((d) => {
       const start = [parseFloat(d.DisplayY), parseFloat(d.DisplayX)];
-      const end = [parseFloat(d.DisplayEndY), parseFloat(d.DisplayEndX)];
 
-      if (
-        isNaN(start[0]) || isNaN(start[1]) ||
-        isNaN(end[0]) || isNaN(end[1])
-      ) return;
-
-      // линия ствола
-      const line = L.polyline([start, end], {
-        color: "#0078FF",
-        weight: 2,
-      }).addTo(wellsLayer);
-
-      // маркер устья
+      // Отрисовываем только маркер устья
       const marker = L.circleMarker(start, {
         radius: 4,
         color: "#FF0000",
@@ -120,9 +106,8 @@ const MapComponent = ({ data }) => {
       })
         .bindTooltip(
           `<b>${d.WellName || "Без имени"}</b><br/>
-          X: ${d.DisplayX}<br/>
-          Y: ${d.DisplayY}<br/>
-          Z: ${d.DisplayZ}`
+           X: ${d.DisplayX}<br/>
+           Y: ${d.DisplayY}` // Удалена координата Z
         )
         .addTo(wellsLayer);
     });
@@ -132,7 +117,7 @@ const MapComponent = ({ data }) => {
     // --- Контроль ЛСК (консоль) ---
     const xs = allCoords.map((p) => p[1]);
     const ys = allCoords.map((p) => p[0]);
-    const zs = data.map((d) => parseFloat(d.DisplayZ)).filter((z) => !isNaN(z));
+    // Удалены расчеты Z
 
     console.log("✅ Проверка ЛСК (контроль)");
     console.table({
@@ -142,9 +127,6 @@ const MapComponent = ({ data }) => {
       "min Y": Math.min(...ys),
       "max Y": Math.max(...ys),
       "span Y": Math.max(...ys) - Math.min(...ys),
-      "min Z": Math.min(...zs),
-      "max Z": Math.max(...zs),
-      "span Z": Math.max(...zs) - Math.min(...zs),
     });
 
     // Очистка при размонтировании
