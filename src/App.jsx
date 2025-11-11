@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import MapComponent from './MapComponent';
-import { transformRawToLocal, normalizeLocalCoords } from './utils/geo';
+import { normalizeLocalCoords } from './utils/geo';
 import './App.css';
 
+// --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ---
+// Очистка и парсинг числового значения
 const cleanAndParse = (value) => {
   if (value === null || value === undefined || String(value).trim() === '') return 0;
   return parseFloat(String(value).replace(',', '.'));
 };
 
+// --- ОСНОВНАЯ ОБРАБОТКА ДАННЫХ ---
 const processData = (rawData, setError, setDrillHoles, setStats, setLoading) => {
   try {
     const processedData = rawData.map((item, index) => {
@@ -23,6 +26,7 @@ const processData = (rawData, setError, setDrillHoles, setStats, setLoading) => 
         RawEndPointZ: 'RawEndPointZ',
       };
 
+      // Приведение ключей к стандартному виду (XLSX часто меняет регистр)
       const standardized = Object.keys(item).reduce((acc, key) => {
         for (const standardKey in mapping) {
           if (String(key).toLowerCase().includes(standardKey.toLowerCase())) {
@@ -32,41 +36,38 @@ const processData = (rawData, setError, setDrillHoles, setStats, setLoading) => 
         return acc;
       }, {});
 
-      const rawStartX = cleanAndParse(standardized.RawStartPointX);
-      const rawStartY = cleanAndParse(standardized.RawStartPointY);
-      const rawStartZ = cleanAndParse(standardized.RawStartPointZ);
-      const rawEndX = cleanAndParse(standardized.RawEndPointX);
-      const rawEndY = cleanAndParse(standardized.RawEndPointY);
-      const rawEndZ = cleanAndParse(standardized.RawEndPointZ);
-
-      const localStart = transformRawToLocal(rawStartX, rawStartY);
-      const localEnd = transformRawToLocal(rawEndX, rawEndY);
+      // Читаем координаты — уже в локальной СК
+      const startX = cleanAndParse(standardized.RawStartPointX);
+      const startY = cleanAndParse(standardized.RawStartPointY);
+      const startZ = cleanAndParse(standardized.RawStartPointZ);
+      const endX = cleanAndParse(standardized.RawEndPointX);
+      const endY = cleanAndParse(standardized.RawEndPointY);
+      const endZ = cleanAndParse(standardized.RawEndPointZ);
 
       return {
-        ...standardized,
         id: index,
         HoleName: standardized.HoleName || `Hole_${index + 1}`,
-        LocalStartPointX: localStart.x.toFixed(3),
-        LocalStartPointY: localStart.y.toFixed(3),
-        LocalStartPointZ: rawStartZ.toFixed(3),
-        LocalEndPointX: localEnd.x.toFixed(3),
-        LocalEndPointY: localEnd.y.toFixed(3),
-        LocalEndPointZ: rawEndZ.toFixed(3),
-        RawStartPointX: rawStartX,
-        RawStartPointY: rawStartY,
+        LocalStartPointX: startX.toFixed(3),
+        LocalStartPointY: startY.toFixed(3),
+        LocalStartPointZ: startZ.toFixed(3),
+        LocalEndPointX: endX.toFixed(3),
+        LocalEndPointY: endY.toFixed(3),
+        LocalEndPointZ: endZ.toFixed(3),
       };
     });
 
-    const validData = processedData.filter(p => p.RawStartPointX !== 0 || p.RawStartPointY !== 0);
-
+    // Фильтрация пустых строк
+    const validData = processedData.filter(p => p.LocalStartPointX !== 0 || p.LocalStartPointY !== 0);
     if (validData.length === 0) {
-      setError('Не найдено валидных координат.');
+      setError('Файл не содержит валидных координат скважин.');
       return;
     }
 
+    // Нормализация под Leaflet CRS.Simple
     const normalized = normalizeLocalCoords(validData);
     setDrillHoles(normalized);
 
+    // Контроль ЛСК
     const xs = normalized.map(d => parseFloat(d.LocalStartPointX));
     const ys = normalized.map(d => parseFloat(d.LocalStartPointY));
     const zs = normalized.map(d => parseFloat(d.LocalStartPointZ));
@@ -74,19 +75,25 @@ const processData = (rawData, setError, setDrillHoles, setStats, setLoading) => 
     setStats({
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
+      spanX: Math.max(...xs) - Math.min(...xs),
       minY: Math.min(...ys),
       maxY: Math.max(...ys),
+      spanY: Math.max(...ys) - Math.min(...ys),
       minZ: Math.min(...zs),
       maxZ: Math.max(...zs),
+      centerX: (Math.max(...xs) + Math.min(...xs)) / 2,
+      centerY: (Math.max(...ys) + Math.min(...ys)) / 2,
+      centerZ: (Math.max(...zs) + Math.min(...zs)) / 2,
     });
 
   } catch (e) {
-    setError(`Ошибка обработки: ${e.message}`);
+    setError(`Ошибка обработки данных: ${e.message}`);
   } finally {
     setLoading(false);
   }
 };
 
+// --- ОСНОВНОЙ КОМПОНЕНТ ---
 function App() {
   const [drillHoles, setDrillHoles] = useState([]);
   const [error, setError] = useState(null);
@@ -97,13 +104,15 @@ function App() {
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
     setLoading(true);
     setError(null);
     setFileName(file.name);
     setDrillHoles([]);
 
     const ext = file.name.split('.').pop().toLowerCase();
-    const handleParsedData = (data) => processData(data, setError, setDrillHoles, setStats, setLoading);
+    const handleParsedData = (data) =>
+      processData(data, setError, setDrillHoles, setStats, setLoading);
 
     if (ext === 'csv') {
       Papa.parse(file, {
@@ -122,18 +131,22 @@ function App() {
       };
       reader.readAsArrayBuffer(file);
     } else {
-      setError('Поддерживаются только CSV, XLSX, XLS.');
+      setError('Поддерживаются только CSV, XLSX и XLS.');
       setLoading(false);
     }
   };
 
+  // --- ИНТЕРФЕЙС ---
   return (
     <div className="app-container">
-      <header><h1>Drilling Plan Viewer (ЛСК, 2D вид сверху)</h1></header>
+      <header>
+        <h1>Drilling Plan Viewer — Локальная СК (2D вид сверху)</h1>
+      </header>
+
       <div className="controls">
         <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} disabled={loading} />
+        {fileName && <p>Загружен файл: <strong>{fileName}</strong></p>}
         {error && <p className="error-message">⚠️ {error}</p>}
-        {fileName && <p>{fileName}</p>}
       </div>
 
       {stats && (
@@ -142,11 +155,18 @@ function App() {
           <pre>
 {`min X\t${stats.minX.toFixed(3)} м
 max X\t${stats.maxX.toFixed(3)} м
+span X\t${stats.spanX.toFixed(3)} м
 min Y\t${stats.minY.toFixed(3)} м
 max Y\t${stats.maxY.toFixed(3)} м
+span Y\t${stats.spanY.toFixed(3)} м
 min Z\t${stats.minZ.toFixed(3)} м
-max Z\t${stats.maxZ.toFixed(3)} м`}
+max Z\t${stats.maxZ.toFixed(3)} м
+center X,Y,Z\t${stats.centerX.toFixed(1)}, ${stats.centerY.toFixed(1)}, ${stats.centerZ.toFixed(1)}`}
           </pre>
+          <p className="control-note">
+            Ожидаемый диапазон координат: X ≈ 4000–10000 м, Y ≈ 3000–7000 м.
+            <br />Если значения выходят за диапазон — проверьте столбцы координат.
+          </p>
         </div>
       )}
 
