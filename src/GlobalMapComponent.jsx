@@ -7,19 +7,30 @@ import "leaflet/dist/leaflet.css";
 import { transformUSLOVtoWGS84 } from "./utils/geotransform"; 
 
 const GlobalMapComponent = ({ data }) => {
+  // Используем useRef для доступа к DOM-элементу карты
   const mapRef = useRef(null);
 
   useEffect(() => {
-    // Используем стандартную CRS для географических координат
+    // Проверка, что элемент DOM доступен
+    if (!mapRef.current) return;
+
+    // Очистка старой карты, если она существует (хотя map.remove() в конце тоже работает)
+    const existingMap = L.DomUtil.get(mapRef.current);
+    if (existingMap && existingMap._leaflet_id) {
+        existingMap._leaflet_id = null;
+    }
+    
+    // Используем стандартную CRS для географических координат (WGS 84 / Web Mercator)
     const map = L.map(mapRef.current, {
-      crs: L.CRS.EPSG3857, // Web Mercator (стандарт Google Maps)
-      center: [53.4132, 69.2386], // Приблизительный центр месторождения
+      crs: L.CRS.EPSG3857, 
+      // Приблизительный центр месторождения Алтынтау
+      center: [53.4132, 69.2386], 
       zoom: 12,
+      // Отключаем начальный зум, если есть данные
+      zoomControl: data && data.length > 0,
     });
 
-    // 1. Добавление подложки Google Maps (через прокси-сервис или плагин)
-    // Внимание: Google Maps API требует ключа и плагина, 
-    // поэтому используем OSM (OpenStreetMap) как легальный аналог для примера:
+    // 1. Добавление подложки (OpenStreetMap как аналог Google Maps)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
@@ -29,17 +40,18 @@ const GlobalMapComponent = ({ data }) => {
     
     data.forEach((d) => {
       // Исходные координаты USLOVWGS
-      const easting = parseFloat(d.DisplayX);
-      const northing = parseFloat(d.DisplayY);
+      const easting = parseFloat(d.DisplayX); // Восток (X)
+      const northing = parseFloat(d.DisplayY); // Север (Y)
       
       // *** Главный шаг: Трансформация ***
-      // Получаем [широта, долгота]
+      // Получаем [широта, долгота] из USLOVWGS
       const [lat, lng] = transformUSLOVtoWGS84(easting, northing); 
       
       if (lat && lng) {
         // Добавляем маркер на глобальной карте
         const marker = L.marker([lat, lng])
-          .bindTooltip(`Скважина: ${d.WellName} (WGS84)`, { permanent: false, sticky: true })
+          .bindTooltip(`Скважина: ${d.WellName || 'N/A'}<br/>WGS84: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 
+                       { permanent: false, sticky: true })
           .addTo(map);
           
         wellMarkers.push(marker);
@@ -50,12 +62,26 @@ const GlobalMapComponent = ({ data }) => {
     if (wellMarkers.length > 0) {
       const bounds = L.featureGroup(wellMarkers).getBounds();
       map.fitBounds(bounds.pad(0.15));
+    } else {
+        console.warn("⚠️ Нет валидных координат для отображения на глобальной карте.");
     }
 
+    // Функция очистки: удаляем карту при размонтировании компонента
     return () => map.remove();
   }, [data]);
 
-  return <div id="global-map" ref={mapRef} style={{ height: "85vh", width: "100%" }} />;
+  return (
+    <div 
+      id="global-map" 
+      ref={mapRef} 
+      style={{ 
+        height: "85vh", 
+        width: "100%",
+        border: "1px solid #999",
+        borderRadius: "8px", 
+      }} 
+    />
+  );
 };
 
 export default GlobalMapComponent;
