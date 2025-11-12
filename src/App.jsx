@@ -44,7 +44,6 @@ function App() {
       const json = XLSX.utils.sheet_to_json(sheet);
 
       console.log("📘 Импортировано строк:", json.length);
-      console.log("Пример данных:", json[0]);
 
       // === Проверка наличия ключевых колонок ===
       const requiredFields = [
@@ -56,7 +55,6 @@ function App() {
       const validHeaders = requiredFields.every((key) => key in (json[0] || {}));
 
       if (!validHeaders) {
-        // Замена alert на console.error/логирование
         console.error(
           "❌ Ошибка: файл не содержит необходимых столбцов. Требуются: " +
           requiredFields.join(", ")
@@ -69,19 +67,11 @@ function App() {
       // === Преобразуем данные, используя безопасный парсинг ===
       const processed = json.map((row) => ({
         WellName: row.HoleName || "N/A",
-        // Используем X как Восток, Y как Север
+        // X соответствует Востоку (Easting), Y — Северу (Northing) в USLOVWGS
         DisplayX: safeParseFloat(row.RawStartPointX), 
         DisplayY: safeParseFloat(row.RawStartPointY),
       }));
 
-      // === ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ ===
-      if (processed.length > 0) {
-          console.log("🛠 Проверка первой записи после парсинга:");
-          console.log(`Исходный X: ${json[0].RawStartPointX} | Parsed X: ${processed[0].DisplayX}`);
-          console.log(`Исходный Y: ${json[0].RawStartPointY} | Parsed Y: ${processed[0].DisplayY}`);
-          console.log(`X is NaN? ${isNaN(processed[0].DisplayX)} | Y is NaN? ${isNaN(processed[0].DisplayY)}`);
-      }
-      // ============================
 
       // === Проверка и фильтрация NaN ===
       const validData = processed.filter(
@@ -216,8 +206,10 @@ function App() {
                 </button>
             </div>
             {mapMode === 'local' ? (
+                // Отображаем локальную карту
                 <MapComponent data={data} />
             ) : (
+                // Отображаем глобальную карту с подложкой
                 <GlobalMapComponent data={data} />
             )}
           </>
