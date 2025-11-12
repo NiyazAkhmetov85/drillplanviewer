@@ -14,8 +14,10 @@ const LON_0_DECIMAL = 69.23860833;
 
 // Параметры трансформации (используются как параметры проекции)
 const SCALE_FACTOR = 1.000097549103; // Масштаб
-const FALSE_EASTING = 4458.9140;      // Δx (Ложный Восток)
-const FALSE_NORTHING = 7317.3475;     // Δy (Ложный Север)
+// Ax = 4 458,9140 м (Ложный Восток)
+const FALSE_EASTING = 4458.9140;      
+// Aγ = 7 317,3475 м (Ложный Север)
+const FALSE_NORTHING = 7317.3475;     
 
 // ----------------------------------------------------------------------
 // 2. ОПРЕДЕЛЕНИЕ СИСТЕМ КООРДИНАТ (Proj4 Definitions)
@@ -50,13 +52,16 @@ export function transformUSLOVtoWGS84(easting, northing) {
     }
     
     try {
-        // [Восток, Север] -> [Долгота, Широта]
-        const [longitude, latitude] = proj4(USLOVWGS_DEF, WGS84, [easting, northing]);
+        // !!! КОРРЕКТИРОВКА: Инвертируем оси. Передаем [northing, easting] (Y, X) 
+        // вместо [easting, northing] (X, Y) для Proj4js.
+        // Это делается, так как в некоторых локальных TM-системах оси X и Y инвертированы.
+        const [longitude, latitude] = proj4(USLOVWGS_DEF, WGS84, [northing, easting]);
         
         // Leaflet/JS ожидает формат [Широта, Долгота]
         return [latitude, longitude]; 
     } catch (error) {
         console.error("Ошибка при трансформации USLOVWGS -> WGS84:", error);
+        // Возвращаем null при ошибке, чтобы избежать падения Leaflet
         return [null, null];
     }
 }
