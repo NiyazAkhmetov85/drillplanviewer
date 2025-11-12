@@ -2,7 +2,6 @@
 
 Этот файл управляет пользовательским интерфейсом и переключением карт.
 
-```jsx
 // src/App.jsx
 import React, { useState } from "react";
 import * as XLSX from "xlsx";
@@ -230,6 +229,3 @@ function App() {
 }
 
 export default App;
-
-
-Эти чистые файлы должны устранить ошибку `cite_start is not defined` и обеспечить корректную работу приложения.
