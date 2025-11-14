@@ -100,7 +100,6 @@ function App() {
         {/* 1. СЕКЦИЯ КАРТЫ (ВВЕРХУ) */}
         <section className="map-section">
           {data.length > 0 ? (
-            {/* Передаем триггер в MapComponent */}
             <MapComponent data={data} centerTrigger={centerMapTrigger} />
           ) : (
             <div className="placeholder bg-white p-12 rounded-lg shadow-md text-center text-gray-500 h-[85vh] flex items-center justify-center">
@@ -117,13 +116,12 @@ function App() {
         {stats && (
           <section className="stats bg-white p-4 rounded-lg shadow-md"> 
             <h3 className="text-lg font-semibold mb-2 text-gray-700">Проверка ЛСК (USLOVWGS)</h3>
-            {/* Возвращаем полный горизонтальный макет таблицы */}
             <table className="min-w-full divide-y divide-gray-200">
               <tbody className="bg-white divide-y divide-gray-200">
                 <tr className="text-sm">
                   <td className="px-2 py-1 text-gray-500">min X (Восток)</td>
                   <td className="px-2 py-1 font-mono text-gray-800">{stats.minX} м</td>
-                  <td className="px-2 py-1 text-gray-500">max X (Восток)</td>
+    140           <td className="px-2 py-1 text-gray-500">max X (Восток)</td>
                   <td className="px-2 py-1 font-mono text-gray-800">{stats.maxX} м</td>
                   <td className="px-2 py-1 text-gray-500">Span X</td>
                   <td className="px-2 py-1 font-mono text-gray-800">{stats.spanX} м</td>
