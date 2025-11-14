@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from "react"; // useState больше не нужен
+import React from "react"; 
 // import * as XLSX from "xlsx"; // Удален, так как перемещен в useDrillData
 import { useDrillData } from './hooks/useDrillData'; // Импорт нового хука
 import MapComponent from "./MapComponent";
@@ -18,18 +18,11 @@ function App() {
     handleClear 
   } = useDrillData();
 
-  // Стейт для управления режимом карты удален, так как остается только "local"
-  // const [mapMode, setMapMode] = useState('local'); 
-
-  // Сброс режима карты при очистке данных упрощен
+  // Стейт и функции для управления режимом карты удалены
   const handleClearWithModeReset = () => {
     handleClear();
-    // setMapMode('local'); // Логика сброса режима удалена
   };
   
-  // Функция toggleMapMode удалена
-  // const toggleMapMode = (mode) => { setMapMode(mode); };
-
   return (
     <div className="App p-6 bg-gray-50 min-h-screen font-sans">
       <header className="mb-6 border-b pb-4">
@@ -118,14 +111,12 @@ function App() {
             X (Восток) и Y (Север) соответствуют локальной системе USLOVWGS.
           </p>
         </section>
+      )}
 
       {/* Секция карты */}
       <section className="map-section">
         {data.length > 0 ? (
-          <>
-            {/* Кнопки переключения режимов удалены */}
-            <MapComponent data={data} /> {/* Оставлена только Локальная Карта */}
-          </>
+          <MapComponent data={data} />
         ) : (
           <div className="placeholder bg-white p-12 rounded-lg shadow-md text-center text-gray-500 h-[85vh] flex items-center justify-center">
             {isLoading ? (
