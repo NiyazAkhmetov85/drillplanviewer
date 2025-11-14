@@ -1,96 +1,77 @@
-/* src/App.css */
+/* 1. Общие сбросы: убеждаемся, что приложение занимает всю доступную область */
+/* Класс .App управляется flexbox/min-h-screen через Tailwind в App.jsx */
+html, body {
+    margin: 0;
+    padding: 0;
+    /* Убеждаемся, что 100% высота корректно наследуется */
+    height: 100%; 
+    overflow-x: hidden; /* Предотвращаем горизонтальную прокрутку */
+}
 
-/* 1. Общие стили для всего приложения (App) */
-.App { /* Используем класс .App, как в App.jsx */
-    display: flex;
-    flex-direction: column;
-    height: 100vh; /* Используем 100vh, чтобы приложение занимало всю высоту экрана */
+/* 2. Контейнер карты (CRITICAL!) */
+/* Элемент карты внутри .map-section должен заполнить всю высоту, 
+   определенную родительским flex-контейнером App.jsx */
+.map-section > div { /* Целимся в дочерний div, содержащий карту */
+    height: 100%;
+    min-height: 500px; /* Добавляем минимальную высоту для лучшего UX */
+}
+
+/* Leaflet container must have height set */
+.leaflet-container {
+    height: 100%;
     width: 100%;
 }
 
-/* 2. Контейнер для элементов управления (Controls) */
-.controls {
-    padding: 15px;
-    background-color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-}
+/* 3. Стили для элементов карты (Well Labels) */
 
-/* 3. Контейнер для статистики */
-.stats {
-    padding: 0 15px 15px 15px;
-}
-
-/* 4. Контейнер для карты (CRITICAL!) */
-/* В .App.jsx используется класс .map-section */
-.map-section {
-    flex-grow: 1; /* Заставляет область карты занять все доступное пространство */
-    padding: 15px;
-    min-height: 0; /* Важно для корректной работы flex-grow */
-}
-
-/* 5. Стили для элементов карты (MapComponent) */
-
-/* Leaflet использует .leaflet-pane для контейнеров */
-/* Стили для номеров скважин */
+/* Стиль для меток скважин: читаемость и производительность */
 .well-label {
-    /* Базовые стили */
+    /* Профессиональный стек шрифтов (системный) */
+    font-family: inherit; 
     font-size: 11px;
-    font-weight: bold;
-    color: #000;
-    white-space: nowrap; /* Гарантирует, что номер не переносится */
-    /* Улучшение читаемости на фоне карты */
-    text-shadow: 0 0 3px #fff;
-    pointer-events: none; /* Чтобы не мешать кликать по маркеру */
+    font-weight: 600; /* Полужирный */
+    color: #1f2937; /* Более темный серый для контраста (Tailwind gray-800) */
+    white-space: nowrap; 
+    
+    /* Улучшенная тень для читаемости */
+    text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+    pointer-events: none; /* Гарантируем, что метки не блокируют события */
+    user-select: none; /* Предотвращаем выделение текста */
 }
 
-/* Стили для меток осей (номеров разделителей) */
+/* 4. Стили для меток осей (Axis Labels) */
 .axis-label {
+    font-family: inherit;
     font-size: 10px;
-    font-weight: bold;
-    color: #444;
-    text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+    font-weight: 700;
+    color: #4b5563; /* Серый цвет для второстепенного элемента */
+    user-select: none; 
+    /* Меньшая тень */
+    text-shadow: 0 0 1px #fff; 
+    pointer-events: none;
+    background: transparent; /* Убедимся, что фон не мешает */
 }
 
-/* Смещение меток Y к левому краю (Y-axis) */
+/* Смещение меток Y к левому краю */
 .y-axis-label {
-    /* Leaflet позиционирует маркер, а div-icon должен сместить содержимое */
+    /* Сдвигаем влево, добавляем небольшой отступ */
     transform: translateX(-100%); 
-    padding-right: 5px;
+    padding-right: 8px;
     text-align: right;
 }
 
-/* Смещение меток X к нижнему краю (X-axis) */
+/* Смещение меток X к нижнему краю */
 .x-axis-label {
+    /* Сдвигаем вниз, добавляем небольшой отступ */
     transform: translateY(100%); 
-    padding-top: 5px;
+    padding-top: 8px;
     text-align: center;
 }
 
-/* 6. Дополнительные стили для элементов интерфейса, определенных в App.jsx */
-
+/* 5. Стили для плейсхолдера (улучшение центрирования) */
+/* Если App.jsx использует flex-grow: 1 для .map-section,
+   то .placeholder должен занимать 100% высоты родителя */
 .placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    font-size: 1.2em;
-    color: #999;
-}
-
-table {
-    width: auto; /* Лучше, чем 100% для небольших таблиц статистики */
-    border-collapse: collapse;
-}
-table th, table td {
-    border: 1px solid #eee;
-    padding: 8px;
-    text-align: left;
-    font-size: 0.9em;
-}
-
-/* Стили для секции заголовка и кнопок */
-header h1 {
-    font-size: 1.5em;
-    margin-bottom: 0.5em;
+    height: 100%; /* Занимает всю доступную высоту */
+    /* В App.jsx уже есть Tailwind классы для flex, поэтому здесь не дублируем */
 }
