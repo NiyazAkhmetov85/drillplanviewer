@@ -24,17 +24,13 @@ const GlobalMapComponent = ({ data }) => {
     });
 
     // 1. Добавление подложки (OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-        // ДОБАВЛЕНА ОПЦИЯ, ЕСЛИ КАРТА ЗЕРКАЛЬНАЯ:
-        // tms: true, // Использовать только если OSM был перевернут специально.
-        // Для OSM это обычно не требуется. Проверим, что Leaflet правильно
-        // обрабатывает оси Z/X/Y.
-        // В данном случае, проблема может быть в настройке CRS, но она стандартна (EPSG3857).
-
-        // Если карта перевернута, попробуйте tms: true (Tile Map Service)
-        tms: true 
-    }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CartoDB</a>',
+    subdomains: 'abcd',
+    maxZoom: 20
+    // Если проблема инверсии (зеркальное отображение) сохраняется, 
+    // попробуйте снова добавить tms: true
+    // tms: true
 
     // 2. Трансформация и отрисовка данных скважин
     const wellMarkers = [];
