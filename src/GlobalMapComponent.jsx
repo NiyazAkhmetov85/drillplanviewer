@@ -23,14 +23,13 @@ const GlobalMapComponent = ({ data }) => {
       zoomControl: data && data.length > 0,
     });
 
-    // 1. Добавление подложки (OpenStreetMap)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CartoDB</a>',
-    subdomains: 'abcd',
-    maxZoom: 20
-    // Если проблема инверсии (зеркальное отображение) сохраняется, 
-    // попробуйте снова добавить tms: true
-    // tms: true
+// 1. Добавление подложки (CartoDB Positron)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CartoDB</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
+        tms: true // <--- АКТИВИРОВАНО для исправления зеркального отображения
+    }).addTo(map); // <--- ИСПРАВЛЕННЫЙ ВЫЗОВ
 
     // 2. Трансформация и отрисовка данных скважин
     const wellMarkers = [];
