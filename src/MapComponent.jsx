@@ -4,8 +4,9 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 // Параметры для настройки сетки и осей
-const MAJOR_GRID_STEP = 50; // Шаг основной сетки (легкий фон)
-const AXIS_LABEL_STEP = 10; // Шаг меток на осях (10 метров)
+const GRID_STEP = 10; // Шаг основной сетки (10 метров)
+const LABEL_INTERVAL = 50; // Интервал для отображения чисел (каждые 50 метров)
+const TICK_LENGTH = 5; // Длина засечки в метрах
 
 const MapComponent = ({ data }) => {
   useEffect(() => {
@@ -16,13 +17,10 @@ const MapComponent = ({ data }) => {
     }
 
     // Создаём карту в локальных координатах (метры)
-    // Добавление trackResize: true поможет Leaflet корректно отображать пропорции
     const map = L.map("map", {
       crs: L.CRS.Simple, // простая 2D-плоскость
       minZoom: -2,
       maxZoom: 5,
-      // Leaflet автоматически подгоняет размер, но для идеальной пропорциональности X=Y
-      // мы полагаемся на L.CRS.Simple и подбор границ.
       trackResize: true, 
     });
 
@@ -58,83 +56,159 @@ const MapComponent = ({ data }) => {
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     
-    const minY = sw.lat;
-    const minX = sw.lng;
-    const maxY = ne.lat;
-    const maxX = ne.lng;
+    // Расширяем границы, чтобы учесть метки и засечки
+    const padding = 10;
+    const minY = sw.lat - padding;
+    const minX = sw.lng - padding;
+    const maxY = ne.lat + padding;
+    const maxX = ne.lng + padding;
+    
+    // Снова устанавливаем границы с учетом расширения
+    map.fitBounds(L.latLngBounds([ [minY, minX], [maxY, maxX] ]));
 
-    // Расчет для "ровной" сетки и осей
-    const startX = Math.floor(minX / MAJOR_GRID_STEP) * MAJOR_GRID_STEP;
-    const startY = Math.floor(minY / MAJOR_GRID_STEP) * MAJOR_GRID_STEP;
+    // Выравнивание сетки
+    const startX = Math.floor(minX / GRID_STEP) * GRID_STEP;
+    const startY = Math.floor(minY / GRID_STEP) * GRID_STEP;
 
     // --- Добавляем визуализацию осей и сетки ---
     const gridLayer = L.layerGroup();
     const axisLabelsLayer = L.layerGroup();
-    const axisLinesLayer = L.layerGroup(); // Новый слой для жирных осей
+    const axisLinesLayer = L.layerGroup(); 
 
-    // 1. Основная (фоновая) сетка (50м)
-    for (let x = startX; x <= maxX; x += MAJOR_GRID_STEP) { 
+    // 1. Полная сетка (10 метров)
+    for (let x = startX; x <= maxX; x += GRID_STEP) { 
+      const isMajor = x % LABEL_INTERVAL === 0;
       const line = L.polyline(
         [ [minY, x], [maxY, x] ],
-        { color: "#AAA", weight: 0.5, opacity: 0.4, dashArray: '5, 5' } // Легкая, пунктирная сетка
+        { 
+          color: "#AAA", 
+          weight: isMajor ? 0.7 : 0.3, // Толще для 50м, тоньше для 10м
+          opacity: 0.4, 
+          dashArray: isMajor ? '2, 2' : '1, 3' // Разный тип линии
+        } 
       );
       gridLayer.addLayer(line);
     }
 
-    for (let y = startY; y <= maxY; y += MAJOR_GRID_STEP) {
+    for (let y = startY; y <= maxY; y += GRID_STEP) {
+      const isMajor = y % LABEL_INTERVAL === 0;
       const line = L.polyline(
         [ [y, minX], [y, maxX] ],
-        { color: "#AAA", weight: 0.5, opacity: 0.4, dashArray: '5, 5' }
+        { 
+          color: "#AAA", 
+          weight: isMajor ? 0.7 : 0.3, 
+          opacity: 0.4, 
+          dashArray: isMajor ? '2, 2' : '1, 3'
+        }
       );
       gridLayer.addLayer(line);
     }
     
-    // 2. Линии осей (более жирные) и метки (10м)
-    // Линии X (вертикальные)
-    const axisXLine = L.polyline(
-        [ [minY, minX], [maxY, minX] ], // Левая граница
-        { color: "#000", weight: 1.5, opacity: 0.8 }
-    );
-    axisLinesLayer.addLayer(axisXLine);
-
-    // Линии Y (горизонтальные)
-    const axisYLine = L.polyline(
-        [ [minY, minX], [minY, maxX] ], // Нижняя граница
-        { color: "#000", weight: 1.5, opacity: 0.8 }
-    );
-    axisLinesLayer.addLayer(axisYLine);
+    // 2. Линии осей и метки
     
-    // Метки осей через каждые 10 метров
-    const startLabelX = Math.floor(minX / AXIS_LABEL_STEP) * AXIS_LABEL_STEP;
-    const startLabelY = Math.floor(minY / AXIS_LABEL_STEP) * AXIS_LABEL_STEP;
+    // --- Линии X (Вертикальные, Левая и Правая границы) ---
+    L.polyline(
+        [ [minY, minX], [maxY, minX] ], 
+        { color: "#000", weight: 1.5, opacity: 0.8 }
+    ).addTo(axisLinesLayer);
+    L.polyline(
+        [ [minY, maxX], [maxY, maxX] ], 
+        { color: "#000", weight: 1.5, opacity: 0.8 }
+    ).addTo(axisLinesLayer);
 
-    // Метки оси X (Восток) - на нижней границе
-    for (let x = startLabelX; x <= maxX; x += AXIS_LABEL_STEP) {
+    // --- Линии Y (Горизонтальные, Нижняя и Верхняя границы) ---
+    L.polyline(
+        [ [minY, minX], [minY, maxX] ], 
+        { color: "#000", weight: 1.5, opacity: 0.8 }
+    ).addTo(axisLinesLayer);
+    L.polyline(
+        [ [maxY, minX], [maxY, maxX] ], 
+        { color: "#000", weight: 1.5, opacity: 0.8 }
+    ).addTo(axisLinesLayer);
+    
+    
+    // 3. Метки и засечки (Тики) - по всем четырем сторонам
+    
+    for (let x = startX; x <= maxX; x += GRID_STEP) {
+        const isLabeled = x % LABEL_INTERVAL === 0;
+        const html = isLabeled ? Math.round(x).toString() : '';
+
+        // Метка оси X (Восток) - внизу
         L.marker([minY, x], {
             icon: L.divIcon({
                 className: 'axis-label x-axis-label font-mono text-xs text-gray-800',
-                html: x % (MAJOR_GRID_STEP * 2) === 0 ? Math.round(x).toString() : '', // Метки только на кратных 100м, остальные - пустые
+                html: html,
                 iconSize: [0, 0],
-                iconAnchor: [0, -10] 
+                iconAnchor: [0, -15] 
             })
         }).addTo(axisLabelsLayer);
-        // Добавляем короткую засечку (тик)
-        L.polyline([ [minY, x], [minY + 5, x] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
+        // Засечка внизу
+        L.polyline([ [minY, x], [minY + TICK_LENGTH, x] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
+        
+        // Метка оси X (Восток) - вверху
+        L.marker([maxY, x], {
+            icon: L.divIcon({
+                className: 'axis-label x-axis-label font-mono text-xs text-gray-800',
+                html: html,
+                iconSize: [0, 0],
+                iconAnchor: [0, 10] 
+            })
+        }).addTo(axisLabelsLayer);
+        // Засечка вверху
+        L.polyline([ [maxY, x], [maxY - TICK_LENGTH, x] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
     }
     
-    // Метки оси Y (Север) - на левой границе
-    for (let y = startLabelY; y <= maxY; y += AXIS_LABEL_STEP) {
+    for (let y = startY; y <= maxY; y += GRID_STEP) {
+        const isLabeled = y % LABEL_INTERVAL === 0;
+        const html = isLabeled ? Math.round(y).toString() : '';
+
+        // Метка оси Y (Север) - слева
         L.marker([y, minX], {
             icon: L.divIcon({
                 className: 'axis-label y-axis-label font-mono text-xs text-gray-800',
-                html: y % (MAJOR_GRID_STEP * 2) === 0 ? Math.round(y).toString() : '', // Метки только на кратных 100м
+                html: html,
                 iconSize: [0, 0],
-                iconAnchor: [10, 0] 
+                iconAnchor: [15, 0] 
             })
         }).addTo(axisLabelsLayer);
-        // Добавляем короткую засечку (тик)
-        L.polyline([ [y, minX], [y, minX + 5] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
+        // Засечка слева
+        L.polyline([ [y, minX], [y, minX + TICK_LENGTH] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
+        
+        // Метка оси Y (Север) - справа
+        L.marker([y, maxX], {
+            icon: L.divIcon({
+                className: 'axis-label y-axis-label font-mono text-xs text-gray-800',
+                html: html,
+                iconSize: [0, 0],
+                iconAnchor: [-15, 0] 
+            })
+        }).addTo(axisLabelsLayer);
+        // Засечка справа
+        L.polyline([ [y, maxX], [y, maxX - TICK_LENGTH] ], { color: "#000", weight: 1 }).addTo(axisLabelsLayer);
     }
+    
+    // 4. Добавление надписей осей X и Y
+    // Надпись "Восток (X)" - внизу
+    L.marker([minY, (minX + maxX) / 2], {
+        icon: L.divIcon({
+            className: 'axis-title font-bold text-sm text-gray-800',
+            html: 'Восток (X)',
+            iconSize: [0, 0],
+            iconAnchor: [0, -40] // Смещение вниз
+        })
+    }).addTo(axisLabelsLayer);
+    
+    // Надпись "Север (Y)" - слева
+    L.marker([(minY + maxY) / 2, minX], {
+        icon: L.divIcon({
+            className: 'axis-title font-bold text-sm text-gray-800',
+            // Использование CSS-трансформации для поворота текста
+            html: '<div style="transform: rotate(-90deg); white-space: nowrap;">Север (Y)</div>',
+            iconSize: [0, 0],
+            iconAnchor: [50, 0] // Смещение влево
+        })
+    }).addTo(axisLabelsLayer);
+
 
     gridLayer.addTo(map);
     axisLinesLayer.addTo(map);
@@ -167,9 +241,9 @@ const MapComponent = ({ data }) => {
       // Метка (Label) с номером скважины (HoleName/WellName)
       L.marker(start, {
           icon: L.divIcon({
-              className: 'well-label font-bold text-sm text-gray-800', // Улучшенный стиль
+              className: 'well-label font-bold text-sm text-gray-800',
               html: `<b>${d.WellName || 'N/A'}</b>`, 
-              iconAnchor: [-5, 12] // Смещение, чтобы метка была рядом с маркером
+              iconAnchor: [-5, 12]
           })
       }).addTo(wellsLayer);
 
@@ -198,8 +272,6 @@ const MapComponent = ({ data }) => {
   return (
     <div
       id="map"
-      // Убедитесь, что div имеет квадратные пропорции в родительском контейнере,
-      // если Leaflet.fitBounds не справляется с идеальной пропорцией 1:1.
       style={{
         height: "85vh",
         width: "100%",
