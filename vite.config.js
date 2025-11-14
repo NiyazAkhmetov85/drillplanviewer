@@ -8,8 +8,5 @@ export default defineConfig({
   publicDir: 'public',
   build: {
     outDir: 'dist',
-    // === ВРЕМЕННО ОТКЛЮЧАЕМ МИНИФИКАЦИЮ ДЛЯ ОТЛАДКИ ===
-    minify: false, 
-    // ===================================================
   },
 })
