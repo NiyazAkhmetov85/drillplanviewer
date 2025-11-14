@@ -35,10 +35,10 @@ function App() {
     <div className="App p-6 bg-gray-50 min-h-screen font-sans">
       <header className="mb-6 border-b pb-4">
         <h1 className="text-3xl font-bold text-gray-800">
-          ⛏️ Drill Plan Viewer (USLOVWGS)
+          Drill Plan Viewer
         </h1>
         <p className="text-sm text-gray-500">
-          Отображение паспортов бурения в локальной системе координат USLOVWGS (Восток, Север)
+          Отображение паспортов бурения
         </p>
       </header>
 
